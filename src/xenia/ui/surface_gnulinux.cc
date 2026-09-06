@@ -9,7 +9,7 @@
 
 #include "xenia/ui/surface_gnulinux.h"
 
-#include <X11/Xlib-xcb.h>
+#include <X11/Xlib.h>
 #include <gdk/gdk.h>
 #include <gdk/gdkx.h>
 #include <gtk/gtk.h>
@@ -34,6 +34,12 @@ bool XcbWindowSurface::GetSizeImpl(uint32_t& width_out,
   height_out = reply->height;
   std::free(reply);
   return true;
+}
+
+XcbWindowSurface::~XcbWindowSurface() {
+  if (connection_) {
+    xcb_disconnect(connection_);
+  }
 }
 
 bool WaylandWindowSurface::GetSizeImpl(uint32_t& width_out,
@@ -169,8 +175,22 @@ std::unique_ptr<Surface> GtkSurfaceFactory::Create(
 
   if (GDK_IS_X11_DISPLAY(display) &&
       (allowed_types & Surface::kTypeFlag_XcbWindow)) {
+    // The Vulkan X11 WSI runs a present-queue thread that issues xcb requests
+    // on whatever connection the surface was created from, and GetSizeImpl
+    // issues its own. Driving GTK's Xlib connection that way makes libX11 lose
+    // track of the request sequence and abort in poll_for_event
+    // (xcb_xlib_threads_sequence_lost), so presentation gets a connection of
+    // its own. XIDs are server-wide, so the GTK-created window is addressable
+    // from it.
+    Display* xdisplay = gdk_x11_display_get_xdisplay(display);
     xcb_connection_t* connection =
-        XGetXCBConnection(gdk_x11_display_get_xdisplay(display));
+        xcb_connect(DisplayString(xdisplay), nullptr);
+    if (!connection || xcb_connection_has_error(connection)) {
+      if (connection) {
+        xcb_disconnect(connection);
+      }
+      return nullptr;
+    }
     xcb_window_t window = gdk_x11_window_get_xid(gdk_window);
     return std::make_unique<XcbWindowSurface>(connection, window);
   }

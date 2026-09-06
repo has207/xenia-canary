@@ -21,8 +21,11 @@ namespace ui {
 
 class XcbWindowSurface final : public Surface {
  public:
+  // Takes ownership of `connection`, which GtkSurfaceFactory::Create opens
+  // exclusively for this surface - see the comment there.
   explicit XcbWindowSurface(xcb_connection_t* connection, xcb_window_t window)
       : connection_(connection), window_(window) {}
+  ~XcbWindowSurface() override;
   TypeIndex GetType() const override { return kTypeIndex_XcbWindow; }
   xcb_connection_t* connection() const { return connection_; }
   xcb_window_t window() const { return window_; }
