@@ -93,6 +93,16 @@ DEFINE_CVar(launch_data, "",
 DEFINE_bool(dump_xex, false, "Dump the main XEX to current directory on launch",
             "General");
 
+DEFINE_string(media_type, "auto",
+              "Media the title is told it runs from. Use: [auto, hdd, odd]. "
+              "auto matches the launched image - ODD for iso/zar, HDD for a "
+              "directly launched default.xex, and STFS containers report "
+              "their type based on whether they are disc or digital dumps. "
+              "This should mostly be fine, but some disc dumps want to run "
+              "as HDD to avoid unnecessary file installs, while others may "
+              "need to run as ODD to force those installs.",
+              "Content");
+
 DEFINE_bool(allow_game_relative_writes, false,
             "Not useful to non-developers. Allows code to write to paths "
             "relative to game://. Used for "
@@ -709,6 +719,25 @@ X_STATUS Emulator::LaunchPath(const std::filesystem::path& path) {
   }
 }
 
+void Emulator::SetDeploymentType(XDeploymentType detected_type) {
+  XDeploymentType type = detected_type;
+  if (cvars::media_type == "hdd") {
+    // kDownload is already an HDD device, and says more about the title.
+    if (detected_type != XDeploymentType::kDownload) {
+      type = XDeploymentType::kInstalledToHDD;
+    }
+  } else if (cvars::media_type == "odd") {
+    type = XDeploymentType::kOpticalDisc;
+  } else if (cvars::media_type != "auto") {
+    XELOGW("Unknown media_type '{}', using auto", cvars::media_type);
+  }
+
+  if (type != detected_type) {
+    XELOGI("Deployment type overridden to {}", cvars::media_type);
+  }
+  kernel_state_->deployment_type_ = type;
+}
+
 X_STATUS Emulator::LaunchXexFile(const std::filesystem::path& path) {
   // We create a virtual filesystem pointing to its directory and symlink
   // that to the game filesystem.
@@ -728,7 +757,7 @@ X_STATUS Emulator::LaunchXexFile(const std::filesystem::path& path) {
     return result;
   }
 
-  kernel_state_->deployment_type_ = XDeploymentType::kInstalledToHDD;
+  SetDeploymentType(XDeploymentType::kInstalledToHDD);
 
   if (!kernel::IsSystemTitle(kernel_state_->title_id())) {
     return result;
@@ -761,7 +790,7 @@ X_STATUS Emulator::LaunchDiscImage(const std::filesystem::path& path) {
   if (result == X_STATUS_NOT_FOUND && !cvars::launch_module.empty()) {
     return LaunchDefaultModule(path);
   }
-  kernel_state_->deployment_type_ = XDeploymentType::kOpticalDisc;
+  SetDeploymentType(XDeploymentType::kOpticalDisc);
   return result;
 }
 
@@ -774,7 +803,7 @@ X_STATUS Emulator::LaunchDiscArchive(const std::filesystem::path& path) {
   if (result == X_STATUS_NOT_FOUND && !cvars::launch_module.empty()) {
     return LaunchDefaultModule(path);
   }
-  kernel_state_->deployment_type_ = XDeploymentType::kOpticalDisc;
+  SetDeploymentType(XDeploymentType::kOpticalDisc);
   return result;
 }
 
@@ -792,9 +821,8 @@ X_STATUS Emulator::LaunchStfsContainer(const std::filesystem::path& path) {
   // A disc rip installed to the HDD still runs as a disc title.
   const bool is_disc_content =
       content_type == static_cast<uint32_t>(XContentType::kInstalledGame);
-  kernel_state_->deployment_type_ = is_disc_content
-                                        ? XDeploymentType::kOpticalDisc
-                                        : XDeploymentType::kDownload;
+  SetDeploymentType(is_disc_content ? XDeploymentType::kOpticalDisc
+                                    : XDeploymentType::kDownload);
   XELOGI("LaunchStfsContainer: content type {:08X}, running as {}",
          content_type, is_disc_content ? "optical disc" : "download");
   return result;
@@ -806,12 +834,10 @@ X_STATUS Emulator::LaunchDefaultModule(const std::filesystem::path& path) {
   X_STATUS result = CompleteLaunch(path, module_path);
 
   if (XSUCCEEDED(result)) {
-    kernel_state_->deployment_type_ = XDeploymentType::kInstalledToHDD;
-    auto title_id = kernel_state_->title_id();
-    if (!kernel::IsSystemTitle(title_id)) {
-      // Assumption that any loaded game is loaded as a disc.
-      kernel_state_->deployment_type_ = XDeploymentType::kOpticalDisc;
-    }
+    // No media info on this path, so assume a disc unless it's a system title.
+    SetDeploymentType(kernel::IsSystemTitle(kernel_state_->title_id())
+                          ? XDeploymentType::kInstalledToHDD
+                          : XDeploymentType::kOpticalDisc);
   }
   return result;
 }

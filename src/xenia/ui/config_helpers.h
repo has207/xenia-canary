@@ -313,6 +313,7 @@ GetKnownEnumOptions() {
 #endif
         {"d3d12_readback_resolve",
          {"kCopy", "kComputeLuminance", "kComputeRGBA16"}},
+        {"media_type", {"auto", "hdd", "odd"}},
         {"occlusion_query", {"fake", "fast", "fast-alt", "strict"}},
         {"readback_resolve", {"fast", "all", "none"}},
         {"render_target_path", {"performance", "accuracy"}},

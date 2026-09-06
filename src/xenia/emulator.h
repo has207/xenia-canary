@@ -434,6 +434,9 @@ class Emulator {
   std::string RemountAndResolveLaunchPath(const std::string& launch_path);
   std::string FindLaunchModule();
 
+  // Applies the media_type cvar override, if any.
+  void SetDeploymentType(XDeploymentType detected_type);
+
   X_STATUS CompleteLaunch(const std::filesystem::path& path,
                           const std::string_view module_path);
 
