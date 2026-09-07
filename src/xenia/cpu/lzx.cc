@@ -11,6 +11,7 @@
 
 #include <algorithm>
 #include <climits>
+#include <cstring>
 
 #include "xenia/base/byte_order.h"
 #include "xenia/base/logging.h"
@@ -163,9 +164,17 @@ int lzxdelta_apply_patch(xe::xex2_delta_patch* patch, size_t patch_len,
                     cur_patch->uncompressed_len);
         break;
       case 1:  // copy from old -> new
-        std::memcpy((char*)dest + cur_patch->new_addr,
-                    (char*)dest + cur_patch->old_addr,
-                    cur_patch->uncompressed_len);
+        // Both ends are inside the image being patched, and "this region
+        // moved" is exactly the case where they overlap, so this has to be a
+        // memmove. memcpy over an overlap is undefined, and the two differ in
+        // practice: glibc's x86-64 memcpy shares its implementation with
+        // memmove and copies backwards when the ranges overlap, while its
+        // aarch64 memcpy copies forwards in 16 byte chunks with no overlap
+        // check - the destination stomps source bytes it has not read yet and
+        // the result comes out periodic with period (new_addr - old_addr).
+        std::memmove((char*)dest + cur_patch->new_addr,
+                     (char*)dest + cur_patch->old_addr,
+                     cur_patch->uncompressed_len);
         break;
       default:  // delta patch
         patch_sz =
