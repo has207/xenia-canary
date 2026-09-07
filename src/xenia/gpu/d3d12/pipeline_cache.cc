@@ -242,9 +242,9 @@ void PipelineCache::InitializeShaderStorage(
   pipeline_config.file_suffix =
       fmt::format(".{}.d3d12.xpso", edram_rov_used ? "rov" : "rtv");
   pipeline_config.api_magic = edram_rov_used ? 0x4F525844 : 0x54525844;
-  pipeline_config.version =
-      std::max(PipelineDescription::kVersion,
-               SpirvShaderTranslator::Modification::kVersion);
+  // Sum so a bump of either version invalidates - both only ever move up.
+  pipeline_config.version = PipelineDescription::kVersion +
+                            SpirvShaderTranslator::Modification::kVersion;
 
   uint32_t storage_index = storage_writer_.storage_index() + 1;
 

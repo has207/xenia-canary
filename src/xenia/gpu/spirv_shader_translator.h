@@ -36,12 +36,11 @@ namespace gpu {
 class SpirvShaderTranslator : public ShaderTranslator {
  public:
   union Modification {
-    // If anything in this is structure is changed in a way not compatible with
+    // If anything in this structure is changed in a way not compatible with
     // the previous layout, invalidate the pipeline storages by increasing this
-    // version number (0xYYYYMMDD)!
-    // TODO(Triang3l): Change to 0xYYYYMMDD once it's out of the rapid
-    // prototyping stage (easier to do small granular updates with an
-    // incremental counter).
+    // version number! Backends add it to their dated
+    // PipelineDescription::kVersion, so bumping either one is enough. Only
+    // ever raise it, a reverted layout change needs another bump.
     static constexpr uint32_t kVersion = 20;
 
     enum class DepthStencilMode : uint32_t {

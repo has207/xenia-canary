@@ -2328,8 +2328,9 @@ void MetalCommandProcessor::InitializeShaderStorage(
   ShaderStorageWriter<PipelineStoredDescription>::PipelineStorageConfig config;
   config.file_suffix = ".metal.xpso";
   config.api_magic = kPipelineStorageAPIMagicMetal;
-  config.version = std::max(PipelineDescription::kVersion,
-                            SpirvShaderTranslator::Modification::kVersion);
+  // Sum so a bump of either version invalidates - both only ever move up.
+  config.version = PipelineDescription::kVersion +
+                   SpirvShaderTranslator::Modification::kVersion;
 
   uint32_t storage_index = storage_writer_.storage_index() + 1;
   std::vector<PipelineStoredDescription> stored_descriptions;

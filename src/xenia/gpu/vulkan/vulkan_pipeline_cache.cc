@@ -2389,9 +2389,9 @@ void VulkanPipelineCache::InitializeShaderStorage(
   pipeline_config.file_suffix =
       fmt::format(".{}.vk.xpso", edram_fsi_used ? "fsi" : "fbo");
   pipeline_config.api_magic = kPipelineStorageAPIMagicVulkan;
-  pipeline_config.version =
-      std::max(PipelineDescription::kVersion,
-               SpirvShaderTranslator::Modification::kVersion);
+  // Sum so a bump of either version invalidates - both only ever move up.
+  pipeline_config.version = PipelineDescription::kVersion +
+                            SpirvShaderTranslator::Modification::kVersion;
 
   uint32_t storage_index = storage_writer_.storage_index() + 1;
 
