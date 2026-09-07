@@ -42,8 +42,6 @@ DEFINE_bool(
     "capability.",
     "GPU");
 
-DECLARE_bool(precise_interpolation);
-
 DEFINE_bool(
     spirv_moltenvk_allow_contraction, true,
     "When translating SPIR-V for MoltenVK, omit NoContraction decorations so "
@@ -215,8 +213,6 @@ uint64_t SpirvShaderTranslator::GetDefaultPixelShaderModification(
   Modification shader_modification;
   shader_modification.pixel.dynamic_addressable_register_count =
       dynamic_addressable_register_count;
-  shader_modification.pixel.precise_interpolation =
-      cvars::precise_interpolation ? 1 : 0;
   return shader_modification.value;
 }
 
@@ -468,8 +464,6 @@ void SpirvShaderTranslator::StartTranslation() {
        type_uint2_},
       {"edram_rt_base_dwords_scaled",
        offsetof(SystemConstants, edram_rt_base_dwords_scaled), type_uint4_},
-      {"edram_rt_format_flags",
-       offsetof(SystemConstants, edram_rt_format_flags), type_uint4_},
       {"edram_rt_blend_factors_ops",
        offsetof(SystemConstants, edram_rt_blend_factors_ops), type_uint4_},
       {"edram_rt_keep_mask", offsetof(SystemConstants, edram_rt_keep_mask),
@@ -1045,7 +1039,7 @@ std::vector<uint8_t> SpirvShaderTranslator::CompleteTranslation() {
       // to keep coarse early-Z culling possible. Matches SV_DepthLessEqual in
       // the DXBC backend.
       if (!current_shader().writes_depth() && !DSV_IsApplyingPolygonOffset() &&
-          GetSpirvShaderModification().pixel.depth_stencil_mode ==
+          GetHostRtShaderModification().pixel.depth_stencil_mode ==
               Modification::DepthStencilMode::kFloat24Truncating) {
         builder_->addExecutionMode(function_main_, spv::ExecutionModeDepthLess);
       }
@@ -3142,8 +3136,7 @@ void SpirvShaderTranslator::StartFragmentShaderBeforeMain() {
     // Skip barycentric for point primitives - barycentric coordinates are only
     // meaningful for triangles.
     bool use_barycentric_interpolation =
-        shader_modification.pixel.precise_interpolation &&
-        features_.fragment_shader_barycentric &&
+        precise_interpolation_ && features_.fragment_shader_barycentric &&
         !shader_modification.pixel.param_gen_point;
     if (use_barycentric_interpolation) {
       // Add extension and capability for barycentric interpolation.
@@ -3288,7 +3281,7 @@ void SpirvShaderTranslator::StartFragmentShaderBeforeMain() {
       };
       // Only create outputs for color targets that are both written by the
       // shader and actually bound in the render pass.
-      Modification shader_modification = GetSpirvShaderModification();
+      Modification shader_modification = GetHostRtShaderModification();
       uint32_t color_targets_remaining =
           current_shader().writes_color_targets() &
           shader_modification.pixel.color_targets_used;
@@ -3499,8 +3492,7 @@ void SpirvShaderTranslator::StartFragmentShaderInMain() {
   // only meaningful for triangles.
   Modification shader_modification = GetSpirvShaderModification();
   bool use_barycentric_interpolation =
-      shader_modification.pixel.precise_interpolation &&
-      features_.fragment_shader_barycentric &&
+      precise_interpolation_ && features_.fragment_shader_barycentric &&
       !shader_modification.pixel.param_gen_point;
   // Barycentric weights splatted to float4 for interpolation.
   // Using only bary.y and bary.z since we anchor on v0 (bary.x = 1 - y - z).

@@ -198,12 +198,31 @@ uint64_t GuestSpirvShaderCache::GetPixelShaderModification(
     // sample count. No new pipeline permutations, they already vary by it.
     modification.pixel.set_fsi_msaa_samples(
         regs.Get<reg::RB_SURFACE_INFO>().msaa_samples);
+    // Per render target, the format that drives the pack and unpack trees
+    // and whether it blends. Unlike the sample count these add pipeline
+    // permutations - the FSI render pass has no attachments to vary by - so
+    // skip render targets the draw masks off, which the shader skips anyway.
+    bool any_blending = false;
+    for (uint32_t i = 0; i < xenos::kMaxColorRenderTargets; ++i) {
+      if (!shader.writes_color_target(i) ||
+          !((normalized_color_mask >> (i * 4)) & 0xF)) {
+        continue;
+      }
+      modification.pixel.set_fsi_rt_format(
+          i, regs.Get<reg::RB_COLOR_INFO>(
+                     reg::RB_COLOR_INFO::rt_register_indices[i])
+                 .color_format);
+      // The shader treats 1 * source + 0 * destination as no blending.
+      if ((regs.Get<reg::RB_BLENDCONTROL>(
+                   reg::RB_BLENDCONTROL::rt_register_indices[i])
+               .value &
+           0x1FFF1FFF) != 0x00010001) {
+        any_blending = true;
+      }
+    }
+    // With no blending anywhere, the whole blending path can be left out.
+    modification.pixel.fsi_no_blending = any_blending ? 0 : 1;
   }
-
-  // Manual barycentric interpolation for precision, where the host supports it
-  // (D3D12 barycentrics). Vulkan leaves this at the default.
-  modification.pixel.precise_interpolation =
-      host_.precise_interpolation_supported() ? 1 : 0;
 
   return modification.value;
 }

@@ -126,10 +126,6 @@ void WriteFragmentShaderInterlockSystemConstants(
       dirty |= system_constants.edram_rt_base_dwords_scaled[i] !=
                rt_base_dwords_scaled;
       system_constants.edram_rt_base_dwords_scaled[i] = rt_base_dwords_scaled;
-      uint32_t format_flags =
-          RenderTargetCache::AddPSIColorFormatFlags(color_info.color_format);
-      dirty |= system_constants.edram_rt_format_flags[i] != format_flags;
-      system_constants.edram_rt_format_flags[i] = format_flags;
       uint32_t blend_factors_ops =
           regs[reg::RB_BLENDCONTROL::rt_register_indices[i]] & 0x1FFF1FFF;
       dirty |=

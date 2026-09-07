@@ -62,11 +62,6 @@ class GuestSpirvShaderCache {
     // the cache's main-thread translator and once per worker translator.
     virtual std::unique_ptr<SpirvShaderTranslator> CreateTranslator() const = 0;
 
-    // Whether manual barycentric (precise) pixel interpolation is available
-    // (D3D12 barycentrics). Vulkan returns false. Folded into the pixel shader
-    // modification.
-    virtual bool precise_interpolation_supported() const = 0;
-
     // Depth float24 policy, which lives on the backend's RenderTargetCache
     // subclass (not the shared base, so it can't be read through the base ref).
     virtual bool depth_float24_round() const = 0;

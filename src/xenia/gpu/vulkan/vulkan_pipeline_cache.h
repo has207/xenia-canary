@@ -390,9 +390,10 @@ class VulkanPipelineCache : public GuestSpirvShaderCache::Host {
 
   VkShaderModule GetGeometryShader(GeometryShaderKey key);
 
+  bool precise_interpolation_supported() const;
+
   // GuestSpirvShaderCache::Host.
   std::unique_ptr<SpirvShaderTranslator> CreateTranslator() const override;
-  bool precise_interpolation_supported() const override;
   bool depth_float24_round() const override {
     return render_target_cache_.depth_float24_round();
   }

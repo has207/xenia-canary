@@ -688,6 +688,7 @@ std::unique_ptr<SpirvShaderTranslator> PipelineCache::CreateTranslator() const {
   return std::make_unique<SpirvShaderTranslator>(
       spirv_features, render_target_cache_.msaa_2x_supported(),
       /*native_2x_msaa_no_attachments=*/false, edram_fragment_shader_interlock,
+      precise_interpolation_supported(),
       render_target_cache_.draw_resolution_scale_x(),
       render_target_cache_.draw_resolution_scale_y());
 }

@@ -119,7 +119,7 @@ class PipelineCache : public GuestSpirvShaderCache::Host {
   // translator (standard feature set), one per creation thread plus the main
   // thread (the translator is not thread safe).
   std::unique_ptr<SpirvShaderTranslator> CreateTranslator() const override;
-  bool precise_interpolation_supported() const override;
+  bool precise_interpolation_supported() const;
   bool depth_float24_round() const override {
     return render_target_cache_.depth_float24_round();
   }

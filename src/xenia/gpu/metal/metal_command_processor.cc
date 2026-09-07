@@ -61,6 +61,7 @@
 #define DISPATCH_DATA_DESTRUCTOR_NONE DISPATCH_DATA_DESTRUCTOR_DEFAULT
 #endif
 
+DECLARE_bool(precise_interpolation);
 DECLARE_bool(clear_memory_page_state);
 DECLARE_bool(submit_on_primary_buffer_end);
 DEFINE_int32(
@@ -1903,7 +1904,7 @@ MetalCommandProcessor::CreateSpirvShaderTranslator() const {
       spirv_translator_native_2x_msaa_,  // native_2x_msaa_with_att
       false,                             // native_2x_msaa_no_att
       false,  // edram_fragment_shader_interlock (host RT path)
-      spirv_translator_resolution_scale_x_,
+      cvars::precise_interpolation, spirv_translator_resolution_scale_x_,
       spirv_translator_resolution_scale_y_);
 }
 

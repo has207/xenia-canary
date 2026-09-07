@@ -24,6 +24,7 @@
 #include "xenia/gpu/spirv_shader_translator.h"
 #include "xenia/gpu/xenos.h"
 
+DECLARE_bool(precise_interpolation);
 DEFINE_path(shader_input, "", "Input shader binary file path.", "GPU");
 DEFINE_string(shader_input_type, "",
               "'vs', 'ps', or unspecified to infer from the given filename.",
@@ -113,8 +114,9 @@ int shader_compiler_main(const std::vector<std::string>& args) {
   if (cvars::shader_output_type == "spirv" ||
       cvars::shader_output_type == "spirvtext") {
     translator = std::make_unique<SpirvShaderTranslator>(
-        spirv_features, true, true,
-        cvars::shader_output_pixel_shader_interlock);
+        spirv_features, true, true, cvars::shader_output_pixel_shader_interlock,
+        cvars::precise_interpolation, /*draw_resolution_scale_x=*/1,
+        /*draw_resolution_scale_y=*/1);
   } else {
     // Just output microcode disassembly generated during microcode information
     // gathering.
