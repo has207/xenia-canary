@@ -240,6 +240,20 @@ class BaseHeap {
   // Rebuilds free_blocks_ by scanning page_table_. Used after Restore.
   void RebuildFreeBlocks();
 
+  // Applies `protect` to the host mapping backing the inclusive guest page
+  // range. Handles a host page larger than the guest page by protecting whole
+  // host pages with the most permissive access any guest page inside one
+  // needs, so a neighbour's protection is never tightened. page_table_ is read
+  // for pages outside the range, so it must still hold their current state.
+  bool ApplyHostProtect(uint32_t start_page_number, uint32_t end_page_number,
+                        uint32_t protect, uint32_t* old_protect);
+
+  // Backs the guest page range on the host at commit time. Equivalent to a
+  // host commit where the guest page size is host-page-aligned, and falls back
+  // to ApplyHostProtect where it is not (4 KB guest pages on a 16 KB host).
+  bool CommitHostPages(uint32_t start_page_number, uint32_t page_count,
+                       uint32_t protect);
+
   // Removes (or splits) the free block covering the given page range.
   void RemoveFreeBlock(uint32_t start_page, uint32_t page_count);
 

@@ -114,19 +114,13 @@ static inline bool ShouldSkipHostCommit(const BaseHeap& heap) {
   if (heap.skip_host_protect()) {
     return true;
   }
-#if XE_PLATFORM_MAC
-  // On macOS ARM64 the host page size is 16 KB, and mprotect-based "commit"
-  // creates fragmentation in the 0..512 MB parent physical heap.
+#if XE_PLATFORM_MAC || XE_PLATFORM_LINUX
+  // The parent physical heap is committed read/write in one shot by
+  // Memory::Initialize and is only reached through physical_membase_, which
+  // carries no guest protection - the virtual aliases hold that. Re-protecting
+  // it per allocation only fragments the host VM map.
   if (heap.heap_type() == HeapType::kGuestPhysical && heap.heap_base() == 0x0 &&
       xe::memory::page_size() > 0x1000) {
-    return true;
-  }
-#elif XE_PLATFORM_LINUX
-  // When the host page size is larger than 4 KB (e.g. 64 KB on some ARM64
-  // Linux kernels), mprotect on 4 KB guest page boundaries fails with EINVAL.
-  // All heaps are backed by a shared file mapping (MapFileView) that is
-  // already mapped RW, so the commit is a no-op — skip it.
-  if (xe::memory::page_size() > 0x1000) {
     return true;
   }
 #endif
@@ -238,6 +232,16 @@ bool Memory::Initialize() {
 #endif
   virtual_membase_ = mapping_base_;
   physical_membase_ = mapping_base_ + 0x100000000ull;
+
+  // Host geometry decides whether guest pages can be protected individually
+  // and whether the 0xE0000000 alias needs the 4 KB host offset, so it is the
+  // first thing to compare when a title behaves differently across hosts.
+  XELOGI(
+      "Memory: host page size {} bytes, allocation granularity {} bytes, "
+      "virtual membase {}, physical membase {}",
+      system_page_size_, system_allocation_granularity_,
+      static_cast<void*>(virtual_membase_),
+      static_cast<void*>(physical_membase_));
 
   // Prepare virtual heaps.
   heaps_.v00000000.Initialize(this, virtual_membase_, HeapType::kGuestVirtual,
@@ -698,7 +702,16 @@ bool Memory::AccessViolationCallback(
       block = virtual_address & ~(system_page_size_ - 1);
       size = system_page_size_;
     }
-    if (xe::memory::AllocFixed(TranslateVirtual(block), size,
+    // A host page is the smallest thing protection can cover, so if the guest
+    // still owns part of this one there is no way to back the faulting page
+    // without dropping its neighbour's protection. Leave it to fault.
+    if (!heap->IsRangeUnallocated(block, size)) {
+      return false;
+    }
+    // The 0xE0000000 alias sits at a host offset from its guest address, so
+    // translate through the heap rather than the plain virtual membase.
+    uint8_t* host_block = heap->TranslateRelative(block - heap->heap_base());
+    if (xe::memory::AllocFixed(host_block, size,
                                xe::memory::AllocationType::kCommit,
                                xe::memory::PageAccess::kReadWrite)) {
       // Under the global lock, so a plain counter is fine.
@@ -1239,19 +1252,9 @@ bool BaseHeap::AllocFixed(uint32_t base_address, uint32_t size,
     // Reserve is not needed, as we are mapped already.
   } else {
     if (!ShouldSkipHostCommit(*this)) {
-      auto alloc_type = (allocation_type & kMemoryAllocationCommit)
-                            ? xe::memory::AllocationType::kCommit
-                            : xe::memory::AllocationType::kReserve;
-      void* result = xe::memory::AllocFixed(
-          TranslateRelative(start_page_number * page_size_),
-          page_count * page_size_, alloc_type, ToPageAccess(protect));
-      if (!result) {
+      if (!CommitHostPages(start_page_number, page_count, protect)) {
         XELOGE("BaseHeap::AllocFixed failed to alloc range from host");
         return false;
-      }
-
-      if (cvars::scribble_heap && IsWritableProtect(protect)) {
-        RandomizeMemory(result, page_count * page_size_);
       }
     } else if (cvars::scribble_heap && IsWritableProtect(protect)) {
       RandomizeMemory(TranslateRelative(start_page_number * page_size_),
@@ -1428,21 +1431,11 @@ bool BaseHeap::AllocRange(uint32_t low_address, uint32_t high_address,
     // Reserve is not needed, as we are mapped already.
   } else {
     if (!ShouldSkipHostCommit(*this)) {
-      auto alloc_type = (allocation_type & kMemoryAllocationCommit)
-                            ? xe::memory::AllocationType::kCommit
-                            : xe::memory::AllocationType::kReserve;
-      void* result = xe::memory::AllocFixed(
-          TranslateRelative(start_page_number << page_size_shift_),
-          page_count << page_size_shift_, alloc_type, ToPageAccess(protect));
-      if (!result) {
+      if (!CommitHostPages(start_page_number, page_count, protect)) {
         XELOGE("BaseHeap::Alloc failed to alloc range from host");
         // Restore the free block since we failed.
         InsertFreeBlock(start_page_number, page_count);
         return false;
-      }
-
-      if (cvars::scribble_heap && IsWritableProtect(protect)) {
-        RandomizeMemory(result, page_count << page_size_shift_);
       }
     } else if (cvars::scribble_heap && IsWritableProtect(protect)) {
       RandomizeMemory(TranslateRelative(start_page_number << page_size_shift_),
@@ -1577,6 +1570,145 @@ bool BaseHeap::Release(uint32_t base_address, uint32_t* out_region_size) {
   return true;
 }
 
+bool BaseHeap::ApplyHostProtect(uint32_t start_page_number,
+                                uint32_t end_page_number, uint32_t protect,
+                                uint32_t* old_protect) {
+  const uint32_t xe_page_size = static_cast<uint32_t>(xe::memory::page_size());
+  const uint32_t page_size_mask = xe_page_size - 1;
+  const uint32_t page_count = end_page_number - start_page_number + 1;
+  const bool host_offset_aligned = (host_address_offset_ & page_size_mask) == 0;
+
+  if (skip_host_protect_) {
+    // Host is pinned writable - report the tracked protection.
+    if (old_protect) {
+      *old_protect = page_table_[start_page_number].current_protect;
+    }
+    return true;
+  }
+
+  // We can only protect the exact range if it lands on host page boundaries.
+  if (page_size_ == xe_page_size ||
+      (host_offset_aligned &&
+       (((page_count << page_size_shift_) & page_size_mask) == 0) &&
+       (((start_page_number << page_size_shift_) & page_size_mask) == 0))) {
+    memory::PageAccess old_protect_access;
+    if (!xe::memory::Protect(
+            TranslateRelative(start_page_number << page_size_shift_),
+            page_count << page_size_shift_, ToPageAccess(protect),
+            old_protect ? &old_protect_access : nullptr)) {
+      XELOGE("BaseHeap::Protect failed due to host VirtualProtect failure");
+      return false;
+    }
+    if (old_protect) {
+      *old_protect = FromPageAccess(old_protect_access);
+    }
+    return true;
+  }
+
+  // If the host page size is larger than the guest page size, align protection
+  // to host pages and use the most permissive access needed by any guest page
+  // in each host page to avoid over-restricting smaller guest pages within a
+  // host page.
+  if (page_size_ < xe_page_size) {
+    uint32_t start_offset =
+        host_address_offset_ + (start_page_number << page_size_shift_);
+    uint32_t end_offset =
+        host_address_offset_ + ((end_page_number + 1) << page_size_shift_) - 1;
+
+    uint32_t aligned_start_offset = start_offset & ~page_size_mask;
+    uint32_t aligned_end_offset = (end_offset | page_size_mask) + 1;
+
+    for (uint32_t host_offset = aligned_start_offset;
+         host_offset < aligned_end_offset; host_offset += xe_page_size) {
+      uint32_t first_guest_page = 0;
+      if (host_offset > host_address_offset_) {
+        first_guest_page =
+            (host_offset - host_address_offset_) >> page_size_shift_;
+      }
+      uint32_t host_page_end = host_offset + xe_page_size - 1;
+      if (host_page_end < host_address_offset_) {
+        continue;
+      }
+      uint32_t last_guest_page =
+          (host_page_end - host_address_offset_) >> page_size_shift_;
+      if (last_guest_page >= page_table_.size()) {
+        last_guest_page = static_cast<uint32_t>(page_table_.size()) - 1;
+      }
+
+      xe::memory::PageAccess host_access = xe::memory::PageAccess::kNoAccess;
+      for (uint32_t p = first_guest_page; p <= last_guest_page; ++p) {
+        uint32_t page_prot = (p >= start_page_number && p <= end_page_number)
+                                 ? protect
+                                 : page_table_[p].current_protect;
+        xe::memory::PageAccess page_access = ToPageAccess(page_prot);
+        if (page_access == xe::memory::PageAccess::kReadWrite) {
+          host_access = xe::memory::PageAccess::kReadWrite;
+          break;
+        }
+        if (page_access == xe::memory::PageAccess::kReadOnly &&
+            host_access == xe::memory::PageAccess::kNoAccess) {
+          host_access = xe::memory::PageAccess::kReadOnly;
+        }
+      }
+
+      xe::memory::Protect(
+          reinterpret_cast<void*>(reinterpret_cast<uintptr_t>(membase_) +
+                                  heap_base_ + host_offset),
+          xe_page_size, host_access, nullptr);
+    }
+
+    if (old_protect) {
+      *old_protect = page_table_[start_page_number].current_protect;
+    }
+    return true;
+  }
+
+  XELOGW("BaseHeap::Protect: unaligned to host page size; skipping mprotect");
+  if (old_protect) {
+    *old_protect = page_table_[start_page_number].current_protect;
+  }
+#if XE_PLATFORM_MAC
+  return true;
+#else
+  return false;
+#endif
+}
+
+bool BaseHeap::CommitHostPages(uint32_t start_page_number, uint32_t page_count,
+                               uint32_t protect) {
+  const uint32_t xe_page_size = static_cast<uint32_t>(xe::memory::page_size());
+  const uint32_t page_size_mask = xe_page_size - 1;
+
+  // Guest pages that tile whole host pages commit directly. Anything finer
+  // (4 KB guest pages on a 16 KB host) cannot: the host would reject the
+  // unaligned base outright, and widening to the host page would overwrite the
+  // protection of the guest pages sharing it.
+  if (page_size_ >= xe_page_size &&
+      (host_address_offset_ & page_size_mask) == 0) {
+    void* result = xe::memory::AllocFixed(
+        TranslateRelative(start_page_number * page_size_),
+        page_count * page_size_, xe::memory::AllocationType::kCommit,
+        ToPageAccess(protect));
+    if (!result) {
+      return false;
+    }
+    if (cvars::scribble_heap && IsWritableProtect(protect)) {
+      RandomizeMemory(result, page_count * page_size_);
+    }
+    return true;
+  }
+
+  if (!ApplyHostProtect(start_page_number, start_page_number + page_count - 1,
+                        protect, nullptr)) {
+    return false;
+  }
+  if (cvars::scribble_heap && IsWritableProtect(protect)) {
+    RandomizeMemory(TranslateRelative(start_page_number * page_size_),
+                    page_count * page_size_);
+  }
+  return true;
+}
+
 bool BaseHeap::Protect(uint32_t address, uint32_t size, uint32_t protect,
                        uint32_t* old_protect) {
   if (!size) {
@@ -1630,102 +1762,9 @@ bool BaseHeap::Protect(uint32_t address, uint32_t size, uint32_t protect,
       return false;
     }
   }
-  uint32_t xe_page_size = static_cast<uint32_t>(xe::memory::page_size());
-
-  uint32_t page_size_mask = xe_page_size - 1;
-
-  // Attempt host change (hopefully won't fail).
-  // We can only do this if our size matches system page granularity.
-  uint32_t page_count = end_page_number - start_page_number + 1;
-  bool host_offset_aligned = (host_address_offset_ & page_size_mask) == 0;
-  if (skip_host_protect_) {
-    // Host is pinned writable - report the tracked protection.
-    if (old_protect) {
-      *old_protect = page_table_[start_page_number].current_protect;
-    }
-  } else if (page_size_ == xe_page_size ||
-             (host_offset_aligned &&
-              (((page_count << page_size_shift_) & page_size_mask) == 0) &&
-              (((start_page_number << page_size_shift_) & page_size_mask) ==
-               0))) {
-    memory::PageAccess old_protect_access;
-    if (!xe::memory::Protect(
-            TranslateRelative(start_page_number << page_size_shift_),
-            page_count << page_size_shift_, ToPageAccess(protect),
-            old_protect ? &old_protect_access : nullptr)) {
-      XELOGE("BaseHeap::Protect failed due to host VirtualProtect failure");
-      return false;
-    }
-
-    if (old_protect) {
-      *old_protect = FromPageAccess(old_protect_access);
-    }
-  } else {
-    // If the host page size is larger than the guest page size, align
-    // protection to host pages and use the most permissive access needed by
-    // any guest page in each host page to avoid over-restricting smaller guest
-    // pages within a host page.
-    if (page_size_ < xe_page_size) {
-      uint32_t start_offset =
-          host_address_offset_ + (start_page_number << page_size_shift_);
-      uint32_t end_offset = host_address_offset_ +
-                            ((end_page_number + 1) << page_size_shift_) - 1;
-
-      uint32_t aligned_start_offset = start_offset & ~page_size_mask;
-      uint32_t aligned_end_offset = (end_offset | page_size_mask) + 1;
-
-      for (uint32_t host_offset = aligned_start_offset;
-           host_offset < aligned_end_offset; host_offset += xe_page_size) {
-        uint32_t first_guest_page = 0;
-        if (host_offset > host_address_offset_) {
-          first_guest_page =
-              (host_offset - host_address_offset_) >> page_size_shift_;
-        }
-        uint32_t host_page_end = host_offset + xe_page_size - 1;
-        if (host_page_end < host_address_offset_) {
-          continue;
-        }
-        uint32_t last_guest_page =
-            (host_page_end - host_address_offset_) >> page_size_shift_;
-        if (last_guest_page >= page_table_.size()) {
-          last_guest_page = static_cast<uint32_t>(page_table_.size()) - 1;
-        }
-
-        xe::memory::PageAccess host_access = xe::memory::PageAccess::kNoAccess;
-        for (uint32_t p = first_guest_page; p <= last_guest_page; ++p) {
-          uint32_t page_prot = (p >= start_page_number && p <= end_page_number)
-                                   ? protect
-                                   : page_table_[p].current_protect;
-          xe::memory::PageAccess page_access = ToPageAccess(page_prot);
-          if (page_access == xe::memory::PageAccess::kReadWrite) {
-            host_access = xe::memory::PageAccess::kReadWrite;
-            break;
-          }
-          if (page_access == xe::memory::PageAccess::kReadOnly &&
-              host_access == xe::memory::PageAccess::kNoAccess) {
-            host_access = xe::memory::PageAccess::kReadOnly;
-          }
-        }
-
-        xe::memory::Protect(
-            reinterpret_cast<void*>(reinterpret_cast<uintptr_t>(membase_) +
-                                    heap_base_ + host_offset),
-            xe_page_size, host_access, nullptr);
-      }
-
-      if (old_protect) {
-        *old_protect = page_table_[start_page_number].current_protect;
-      }
-    } else {
-      XELOGW(
-          "BaseHeap::Protect: unaligned to host page size; skipping mprotect");
-      if (old_protect) {
-        *old_protect = page_table_[start_page_number].current_protect;
-      }
-#if !XE_PLATFORM_MAC
-      return false;
-#endif
-    }
+  if (!ApplyHostProtect(start_page_number, end_page_number, protect,
+                        old_protect)) {
+    return false;
   }
 
   // Perform table change.
@@ -1752,6 +1791,7 @@ bool BaseHeap::QueryRegionInfo(uint32_t base_address,
   out_info->base_address = base_address;
   out_info->allocation_base = 0;
   out_info->allocation_protect = 0;
+  out_info->allocation_size = 0;
   out_info->region_size = 0;
   out_info->state = 0;
   out_info->protect = 0;

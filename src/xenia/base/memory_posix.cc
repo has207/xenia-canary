@@ -202,23 +202,24 @@ void* AllocFixed(void* base_address, size_t length,
 
   if (base_address != nullptr) {
     if (allocation_type == AllocationType::kCommit) {
-#if XE_PLATFORM_MAC
-      size_t host_page = page_size();
-      uintptr_t aligned_addr =
+      // mprotect rejects a base the host cannot address, so round out to whole
+      // host pages. Callers that must not disturb a neighbour sharing the page
+      // (guest pages smaller than the host page) protect through
+      // BaseHeap::ApplyHostProtect instead of committing here.
+      const size_t host_page = page_size();
+      const uintptr_t aligned_addr =
           reinterpret_cast<uintptr_t>(base_address) & ~(host_page - 1);
-      uintptr_t end_addr = reinterpret_cast<uintptr_t>(base_address) + length;
-      end_addr = (end_addr + host_page - 1) & ~(host_page - 1);
+      const uintptr_t end_addr =
+          (reinterpret_cast<uintptr_t>(base_address) + length + host_page - 1) &
+          ~(host_page - 1);
       if (mprotect(reinterpret_cast<void*>(aligned_addr),
-                   end_addr - aligned_addr, prot) == 0) {
-        return base_address;
+                   end_addr - aligned_addr, prot) != 0) {
+        XELOGE("mprotect({}, 0x{:X}, {}) failed: {} ({})",
+               reinterpret_cast<void*>(aligned_addr), end_addr - aligned_addr,
+               prot, strerror(errno), errno);
+        return nullptr;
       }
-      return nullptr;
-#else
-      if (Protect(base_address, length, access)) {
-        return base_address;
-      }
-      return nullptr;
-#endif  // XE_PLATFORM_MAC
+      return base_address;
     }
 #ifdef MAP_FIXED_NOREPLACE
     flags |= MAP_FIXED_NOREPLACE;
