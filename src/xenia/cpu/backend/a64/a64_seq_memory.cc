@@ -152,7 +152,11 @@ static void MMIOAwareStore(void* _ctx, unsigned int guestaddr, T value) {
   if (swap) {
     value = xe::byte_swap(value);
   }
-  if (guestaddr >= 0xE0000000) {
+  // Mirrors PhysicalHeap::Initialize: the 0xE0000000 alias only carries the
+  // 4 KB host offset when the host allocation granularity is coarser than a
+  // guest page and the view had to be mapped without it.
+  if (guestaddr >= 0xE0000000 &&
+      xe::memory::allocation_granularity() > 0x1000) {
     guestaddr += 0x1000;
   }
   auto ctx = reinterpret_cast<ppc::PPCContext*>(_ctx);
@@ -168,7 +172,11 @@ static void MMIOAwareStore(void* _ctx, unsigned int guestaddr, T value) {
 template <typename T, bool swap>
 static T MMIOAwareLoad(void* _ctx, unsigned int guestaddr) {
   T value;
-  if (guestaddr >= 0xE0000000) {
+  // Mirrors PhysicalHeap::Initialize: the 0xE0000000 alias only carries the
+  // 4 KB host offset when the host allocation granularity is coarser than a
+  // guest page and the view had to be mapped without it.
+  if (guestaddr >= 0xE0000000 &&
+      xe::memory::allocation_granularity() > 0x1000) {
     guestaddr += 0x1000;
   }
   auto ctx = reinterpret_cast<ppc::PPCContext*>(_ctx);
