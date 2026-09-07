@@ -1342,6 +1342,15 @@ bool RenderTargetCache::PrepareHostRenderTargetsResolveClear(
     return false;
   }
   assert_true(msaa_samples <= xenos::MsaaSamples::k4X);
+  if (msaa_samples > xenos::MsaaSamples::k4X) {
+    // Safety check because a lot of code assumes up to 4x, including arrays
+    // indexed by the sample count.
+    XELOGE(
+        "{}x MSAA requested by the guest in a resolve clear, Xenos only "
+        "supports up to 4x",
+        uint32_t(1) << uint32_t(msaa_samples));
+    return false;
+  }
   if (!pitch_tiles_at_32bpp) {
     return false;
   }

@@ -131,19 +131,25 @@ bool PipelineCache::Initialize() {
   // once here.
   if (render_target_cache_.GetPath() ==
       RenderTargetCache::Path::kPixelShaderInterlock) {
-    std::vector<uint8_t> depth_only_spirv =
-        guest_shader_cache_.translator().CreateDepthOnlyFragmentShader();
-    if (!depth_only_spirv.empty()) {
-      mesa_depth_only_rov_pixel_shader_ = SpirvToDxilCompiler::Translate(
-          reinterpret_cast<const uint32_t*>(depth_only_spirv.data()),
-          depth_only_spirv.size() / sizeof(uint32_t),
-          SpirvToDxilCompiler::Stage::kPixel, /*lower_to_bindless=*/true);
-    }
-    if (mesa_depth_only_rov_pixel_shader_.empty()) {
-      XELOGE(
-          "spirv_to_dxil: failed to generate the Mesa ROV depth-only pixel "
-          "shader; the guest shader path cannot render depth-only ROV draws");
-      return false;
+    for (size_t i = 0; i < xe::countof(mesa_depth_only_rov_pixel_shaders_);
+         ++i) {
+      std::vector<uint8_t> depth_only_spirv =
+          guest_shader_cache_.translator().CreateDepthOnlyFragmentShader(
+              xenos::MsaaSamples(i));
+      if (!depth_only_spirv.empty()) {
+        mesa_depth_only_rov_pixel_shaders_[i] = SpirvToDxilCompiler::Translate(
+            reinterpret_cast<const uint32_t*>(depth_only_spirv.data()),
+            depth_only_spirv.size() / sizeof(uint32_t),
+            SpirvToDxilCompiler::Stage::kPixel, /*lower_to_bindless=*/true);
+      }
+      if (mesa_depth_only_rov_pixel_shaders_[i].empty()) {
+        XELOGE(
+            "spirv_to_dxil: failed to generate the {}-sample Mesa ROV "
+            "depth-only pixel shader; the guest shader path cannot render "
+            "depth-only ROV draws",
+            UINT32_C(1) << i);
+        return false;
+      }
     }
   }
 
@@ -1931,6 +1937,9 @@ bool PipelineCache::GetCurrentStateDescription(
   xenos::MsaaSamples host_msaa_samples =
       regs.Get<reg::RB_SURFACE_INFO>().msaa_samples;
   if (edram_rov_used) {
+    // The depth-only pixel shader is specialized for the guest count, which
+    // the host one is about to lose.
+    description_out.guest_msaa_samples = host_msaa_samples;
     if (host_msaa_samples == xenos::MsaaSamples::k2X) {
       // 2 is not supported in ForcedSampleCount on Nvidia.
       host_msaa_samples = xenos::MsaaSamples::k4X;
@@ -2176,9 +2185,12 @@ ID3D12PipelineState* PipelineCache::CreateD3D12Pipeline(
   } else if (edram_rov_used) {
     // Real ROV depth-only shader (writes EDRAM depth/stencil). The no-op
     // placeholder_ps is only a fallback if generation failed.
-    if (!mesa_depth_only_rov_pixel_shader_.empty()) {
-      state_desc.PS.pShaderBytecode = mesa_depth_only_rov_pixel_shader_.data();
-      state_desc.PS.BytecodeLength = mesa_depth_only_rov_pixel_shader_.size();
+    const std::vector<uint8_t>& mesa_depth_only_rov_pixel_shader =
+        mesa_depth_only_rov_pixel_shaders_[size_t(
+            description.guest_msaa_samples)];
+    if (!mesa_depth_only_rov_pixel_shader.empty()) {
+      state_desc.PS.pShaderBytecode = mesa_depth_only_rov_pixel_shader.data();
+      state_desc.PS.BytecodeLength = mesa_depth_only_rov_pixel_shader.size();
     } else {
       state_desc.PS.pShaderBytecode = shaders::placeholder_ps;
       state_desc.PS.BytecodeLength = sizeof(shaders::placeholder_ps);

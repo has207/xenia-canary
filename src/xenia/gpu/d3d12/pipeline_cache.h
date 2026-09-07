@@ -315,6 +315,10 @@ class PipelineCache : public GuestSpirvShaderCache::Host {
     uint32_t use_mesa_dxil : 1;  // 28
     // Native draw (scale threshold), keeps slope-scale unscaled.
     uint32_t resolution_scale_native : 1;  // 29
+    // ROV only - selects the depth-only pixel shader, which is specialized
+    // for the guest count. host_msaa_samples can't, guest 2x is rasterized as
+    // host 4x there.
+    xenos::MsaaSamples guest_msaa_samples : 2;  // 31
 
     uint32_t stencil_write_mask : 8;                   // 8
     xenos::StencilOp stencil_front_fail_op : 3;        // 11
@@ -331,8 +335,9 @@ class PipelineCache : public GuestSpirvShaderCache::Host {
     inline bool operator==(const PipelineDescription& other) const;
     // Bumped to invalidate caches: vertex/pixel_shader_modification are now
     // the canonical SPIR-V (spirv_to_dxil) modifications, not DXBC; then
-    // again for the constant-alpha blend state.
-    static constexpr uint32_t kVersion = 0x20260822;
+    // again for the constant-alpha blend state; then again for
+    // guest_msaa_samples changing the bitfield layout.
+    static constexpr uint32_t kVersion = 0x20260907;
   });
 
   XEPACKEDSTRUCT(PipelineStoredDescription, {
@@ -492,9 +497,11 @@ class PipelineCache : public GuestSpirvShaderCache::Host {
   // thread (vertex/geometry/ tessellation) and the creation threads (pixel).
   std::mutex mesa_dxil_cache_mutex_;
   // Mesa DXIL for the FSI depth-only pixel shader, generated once at init for
-  // pixel-shader-less ROV draws. Empty if not ROV or generation failed (falls
+  // pixel-shader-less ROV draws - one per guest sample count, which the FSI
+  // shaders are specialized for. Empty if not ROV or generation failed (falls
   // back to the no-op placeholder_ps).
-  std::vector<uint8_t> mesa_depth_only_rov_pixel_shader_;
+  std::vector<uint8_t>
+      mesa_depth_only_rov_pixel_shaders_[size_t(xenos::MsaaSamples::k4X) + 1];
 
   // Ucode hash -> shader.
   std::unordered_map<uint64_t, SpirvShader*, xe::hash::IdentityHasher<uint64_t>>

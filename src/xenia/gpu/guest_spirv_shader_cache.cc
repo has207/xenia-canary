@@ -129,8 +129,7 @@ uint64_t GuestSpirvShaderCache::GetPixelShaderModification(
   }
 
   // Depth/stencil mode, blend pre-multiply and the color target mask are host
-  // render target path state. In the FSI path the shader runs the EDRAM ROP
-  // from the system constants, so these stay at their defaults.
+  // render target path state, left at their defaults on the FSI path.
   if (render_target_cache_.GetPath() ==
       RenderTargetCache::Path::kHostRenderTargets) {
     // Whether this draw is native res due to a scale threshold.
@@ -194,6 +193,11 @@ uint64_t GuestSpirvShaderCache::GetPixelShaderModification(
         (((normalized_color_mask >> 4) & 0xF) ? 2 : 0) |
         (((normalized_color_mask >> 8) & 0xF) ? 4 : 0) |
         (((normalized_color_mask >> 12) & 0xF) ? 8 : 0);
+  } else {
+    // The FSI shader runs the EDRAM ROP itself, so specialize it for the
+    // sample count. No new pipeline permutations, they already vary by it.
+    modification.pixel.set_fsi_msaa_samples(
+        regs.Get<reg::RB_SURFACE_INFO>().msaa_samples);
   }
 
   // Manual barycentric interpolation for precision, where the host supports it

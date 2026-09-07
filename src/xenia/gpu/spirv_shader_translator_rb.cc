@@ -427,16 +427,15 @@ spv::Id SpirvShaderTranslator::Depth20e4To32(SpirvBuilder& builder,
 }
 
 void SpirvShaderTranslator::CompleteFragmentShaderInMain() {
-  // Loaded if needed.
-  spv::Id msaa_samples = spv::NoResult;
+  // Baked into the FSI shader through the modification. Every loop bounded by
+  // it below is on the FSI path.
+  uint32_t fsi_sample_count =
+      edram_fragment_shader_interlock_ ? FSI_GetSampleCount() : 0;
 
   if (edram_fragment_shader_interlock_ && !FSI_IsDepthStencilEarly()) {
-    if (msaa_samples == spv::NoResult) {
-      msaa_samples = LoadMsaaSamplesFromFlags();
-    }
     // Load the sample mask, which may be modified later by killing from
-    // different sources, if not loaded already.
-    FSI_LoadSampleMask(msaa_samples);
+    // different sources.
+    FSI_LoadSampleMask();
   }
 
   bool fsi_pixel_potentially_killed = false;
@@ -701,7 +700,7 @@ void SpirvShaderTranslator::CompleteFragmentShaderInMain() {
     spv::Id color_write_depth_stencil_condition = spv::NoResult;
     if (FSI_IsDepthStencilEarly()) {
       // Perform late depth / stencil writes for samples not discarded.
-      for (uint32_t i = 0; i < 4; ++i) {
+      for (uint32_t i = 0; i < fsi_sample_count; ++i) {
         spv::Id sample_late_depth_stencil_write_needed = builder_->createBinOp(
             spv::OpINotEqual, type_bool_,
             builder_->createBinOp(
@@ -737,10 +736,7 @@ void SpirvShaderTranslator::CompleteFragmentShaderInMain() {
             const_uint_0_);
       }
     } else {
-      if (msaa_samples == spv::NoResult) {
-        msaa_samples = LoadMsaaSamplesFromFlags();
-      }
-      FSI_LoadEdramOffsets(msaa_samples);
+      FSI_LoadEdramOffsets();
       // Begin the critical section on the outermost control flow level so it's
       // entered exactly once on any control flow path as required by the SPIR-V
       // extension specification.
@@ -749,8 +745,8 @@ void SpirvShaderTranslator::CompleteFragmentShaderInMain() {
       // The sample mask might have been made narrower than the initially loaded
       // mask by various conditions that discard the whole pixel, as well as by
       // alpha to coverage.
-      FSI_DepthStencilTest(msaa_samples, fsi_pixel_potentially_killed ||
-                                             (color_targets_written & 0b1));
+      FSI_DepthStencilTest(fsi_pixel_potentially_killed ||
+                           (color_targets_written & 0b1));
       if (color_targets_written) {
         // Only bits 0:3 of main_fsi_sample_mask_ are written by the late
         // depth / stencil test.
@@ -788,7 +784,7 @@ void SpirvShaderTranslator::CompleteFragmentShaderInMain() {
           xenos::kEdramTileWidthSamples * draw_resolution_scale_x_ *
           xenos::kEdramTileHeightSamples * draw_resolution_scale_y_ *
           xenos::kEdramTileCount);
-      for (uint32_t i = 0; i < 4; ++i) {
+      for (uint32_t i = 0; i < fsi_sample_count; ++i) {
         fsi_samples_covered[i] = builder_->createBinOp(
             spv::OpINotEqual, type_bool_,
             builder_->createBinOp(spv::OpBitwiseAnd, type_uint_,
@@ -1042,7 +1038,7 @@ void SpirvShaderTranslator::CompleteFragmentShaderInMain() {
           }
 
           // Blend and mask each sample.
-          for (uint32_t i = 0; i < 4; ++i) {
+          for (uint32_t i = 0; i < fsi_sample_count; ++i) {
             SpirvBuilder::IfBuilder if_sample_covered(
                 fsi_samples_covered[i], spv::SelectionControlDontFlattenMask,
                 *builder_);
@@ -1176,7 +1172,7 @@ void SpirvShaderTranslator::CompleteFragmentShaderInMain() {
                   builder_->createUnaryOp(spv::OpNot, type_uint_,
                                           rt_keep_mask[i]));
             }
-            for (uint32_t i = 0; i < 4; ++i) {
+            for (uint32_t i = 0; i < fsi_sample_count; ++i) {
               SpirvBuilder::IfBuilder if_sample_covered(
                   fsi_samples_covered[i], spv::SelectionControlDontFlattenMask,
                   *builder_);
@@ -1229,7 +1225,7 @@ void SpirvShaderTranslator::CompleteFragmentShaderInMain() {
           if_rt_keep_mask_not_empty.makeBeginElse();
           {
             // Fully overwriting path.
-            for (uint32_t i = 0; i < 4; ++i) {
+            for (uint32_t i = 0; i < fsi_sample_count; ++i) {
               SpirvBuilder::IfBuilder if_sample_covered(
                   fsi_samples_covered[i], spv::SelectionControlDontFlattenMask,
                   *builder_);
@@ -1698,7 +1694,7 @@ spv::Id SpirvShaderTranslator::LoadMsaaSamplesFromFlags() {
       builder_->makeUintConstant(2));
 }
 
-void SpirvShaderTranslator::FSI_LoadSampleMask(spv::Id msaa_samples) {
+void SpirvShaderTranslator::FSI_LoadSampleMask() {
   // On the Xbox 360, 2x MSAA doubles the storage height, 4x MSAA doubles the
   // storage width.
   // The guest 4x sample numbering is the Vulkan one, bit 0 horizontal and
@@ -1706,9 +1702,6 @@ void SpirvShaderTranslator::FSI_LoadSampleMask(spv::Id msaa_samples) {
   // sample 0 at the top while Vulkan counts from the bottom, so the guest
   // samples map to Vulkan 1, 0 with native 2x MSAA and to 0, 3 with 2x
   // emulated as 4x.
-
-  spv::Id const_uint_1 = builder_->makeUintConstant(1);
-  spv::Id const_uint_2 = builder_->makeUintConstant(2);
 
   assert_true(input_sample_mask_ != spv::NoResult);
   id_vector_temp_.clear();
@@ -1720,75 +1713,33 @@ void SpirvShaderTranslator::FSI_LoadSampleMask(spv::Id msaa_samples) {
                                       input_sample_mask_, id_vector_temp_),
           spv::NoPrecision));
 
-  spv::Block& block_msaa_head = *builder_->getBuildPoint();
-  spv::Block& block_msaa_1x = builder_->makeNewBlock();
-  spv::Block& block_msaa_2x = builder_->makeNewBlock();
-  spv::Block& block_msaa_4x = builder_->makeNewBlock();
-  spv::Block& block_msaa_merge = builder_->makeNewBlock();
-  builder_->createSelectionMerge(&block_msaa_merge,
-                                 spv::SelectionControlDontFlattenMask);
-  {
-    std::unique_ptr<spv::Instruction> msaa_switch_op =
-        std::make_unique<spv::Instruction>(spv::OpSwitch);
-    msaa_switch_op->addIdOperand(msaa_samples);
-    // Make 1x the default.
-    msaa_switch_op->addIdOperand(block_msaa_1x.getId());
-    msaa_switch_op->addImmediateOperand(int32_t(xenos::MsaaSamples::k2X));
-    msaa_switch_op->addIdOperand(block_msaa_2x.getId());
-    msaa_switch_op->addImmediateOperand(int32_t(xenos::MsaaSamples::k4X));
-    msaa_switch_op->addIdOperand(block_msaa_4x.getId());
-    builder_->getBuildPoint()->addInstruction(std::move(msaa_switch_op));
+  if (FSI_GetMsaaSamples() != xenos::MsaaSamples::k2X) {
+    // 1x has the one sample, and at 4x the numbering matches - pass the
+    // coverage through.
+    main_fsi_sample_mask_ = input_sample_mask_value;
+    return;
   }
-  block_msaa_1x.addPredecessor(&block_msaa_head);
-  block_msaa_2x.addPredecessor(&block_msaa_head);
-  block_msaa_4x.addPredecessor(&block_msaa_head);
 
-  // 1x MSAA - pass input_sample_mask_value through.
-  builder_->setBuildPoint(&block_msaa_1x);
-  builder_->createBranch(&block_msaa_merge);
-
-  // 2x MSAA.
-  builder_->setBuildPoint(&block_msaa_2x);
-  spv::Id sample_mask_2x;
+  spv::Id const_uint_1 = builder_->makeUintConstant(1);
   if (native_2x_msaa_no_attachments_) {
     // 1 and 0 to 0 and 1.
-    sample_mask_2x = builder_->createBinOp(
+    main_fsi_sample_mask_ = builder_->createBinOp(
         spv::OpShiftRightLogical, type_uint_,
         builder_->createUnaryOp(spv::OpBitReverse, type_uint_,
                                 input_sample_mask_value),
         builder_->makeUintConstant(32 - 2));
   } else {
     // 0 and 3 to 0 and 1 - guest sample 1 comes from host sample 3
-    sample_mask_2x = builder_->createQuadOp(
+    main_fsi_sample_mask_ = builder_->createQuadOp(
         spv::OpBitFieldInsert, type_uint_, input_sample_mask_value,
         builder_->createTriOp(spv::OpBitFieldUExtract, type_uint_,
                               input_sample_mask_value,
                               builder_->makeUintConstant(3), const_uint_1),
         const_uint_1, builder_->makeUintConstant(32 - 1));
   }
-  builder_->createBranch(&block_msaa_merge);
-
-  // At 4x the guest and the Vulkan sample numbering match, so pass the
-  // coverage through.
-  builder_->setBuildPoint(&block_msaa_4x);
-  spv::Id sample_mask_4x = input_sample_mask_value;
-  builder_->createBranch(&block_msaa_merge);
-
-  // Select the result depending on the MSAA sample count.
-  builder_->setBuildPoint(&block_msaa_merge);
-  id_vector_temp_.clear();
-  id_vector_temp_.reserve(2 * 3);
-  id_vector_temp_.push_back(input_sample_mask_value);
-  id_vector_temp_.push_back(block_msaa_1x.getId());
-  id_vector_temp_.push_back(sample_mask_2x);
-  id_vector_temp_.push_back(block_msaa_2x.getId());
-  id_vector_temp_.push_back(sample_mask_4x);
-  id_vector_temp_.push_back(block_msaa_4x.getId());
-  main_fsi_sample_mask_ =
-      builder_->createOp(spv::OpPhi, type_uint_, id_vector_temp_);
 }
 
-void SpirvShaderTranslator::FSI_LoadEdramOffsets(spv::Id msaa_samples) {
+void SpirvShaderTranslator::FSI_LoadEdramOffsets() {
   // Convert the floating-point pixel coordinates to the canonical sample 0
   // coordinates, meaning the coordinates of the pixel's sample 0 in the
   // single sampled view of the EDRAM data. The layout is described in
@@ -1799,12 +1750,9 @@ void SpirvShaderTranslator::FSI_LoadEdramOffsets(spv::Id msaa_samples) {
   assert_true(input_fragment_coordinates_ != spv::NoResult);
   spv::Id const_uint_1 = builder_->makeUintConstant(1);
   spv::Id const_uint_2 = builder_->makeUintConstant(2);
-  spv::Id msaa_is_4x = builder_->createBinOp(
-      spv::OpUGreaterThanEqual, type_bool_, msaa_samples,
-      builder_->makeUintConstant(uint32_t(xenos::MsaaSamples::k4X)));
-  spv::Id msaa_is_2x_or_4x = builder_->createBinOp(
-      spv::OpUGreaterThanEqual, type_bool_, msaa_samples,
-      builder_->makeUintConstant(uint32_t(xenos::MsaaSamples::k2X)));
+  xenos::MsaaSamples msaa_samples = FSI_GetMsaaSamples();
+  bool msaa_is_4x = msaa_samples >= xenos::MsaaSamples::k4X;
+  bool msaa_is_2x_or_4x = msaa_samples >= xenos::MsaaSamples::k2X;
   const uint32_t resolution_scale[2] = {draw_resolution_scale_x_,
                                         draw_resolution_scale_y_};
   spv::Id guest_pixel[2], guest_subpixel[2];
@@ -1840,25 +1788,30 @@ void SpirvShaderTranslator::FSI_LoadEdramOffsets(spv::Id msaa_samples) {
         const_uint_2, builder_->makeUintConstant(30));
   };
   // u0 is ((x >> 1) << 2) | (x & 1) at 4x, x & ~2 at 2x and plain x at 1x.
-  spv::Id sample_u = builder_->createTriOp(
-      spv::OpSelect, type_uint_, msaa_is_4x,
-      expand_pixel_low_bit(guest_pixel[0]),
-      builder_->createTriOp(
-          spv::OpSelect, type_uint_, msaa_is_2x_or_4x,
-          builder_->createBinOp(spv::OpBitwiseAnd, type_uint_, guest_pixel[0],
-                                builder_->makeUintConstant(~uint32_t(2))),
-          guest_pixel[0]));
+  spv::Id sample_u;
+  if (msaa_is_4x) {
+    sample_u = expand_pixel_low_bit(guest_pixel[0]);
+  } else if (msaa_is_2x_or_4x) {
+    sample_u =
+        builder_->createBinOp(spv::OpBitwiseAnd, type_uint_, guest_pixel[0],
+                              builder_->makeUintConstant(~uint32_t(2)));
+  } else {
+    sample_u = guest_pixel[0];
+  }
   // v0 is ((y >> 1) << 2) | (y & 1) at 2x and 4x, with x bit 1 in bit 1 at
   // 2x only. At 1x it's plain y.
-  spv::Id sample_v = builder_->createTriOp(
-      spv::OpSelect, type_uint_, msaa_is_2x_or_4x,
-      builder_->createBinOp(
-          spv::OpBitwiseOr, type_uint_, expand_pixel_low_bit(guest_pixel[1]),
-          builder_->createTriOp(
-              spv::OpSelect, type_uint_, msaa_is_4x, const_uint_0_,
-              builder_->createBinOp(spv::OpBitwiseAnd, type_uint_,
-                                    guest_pixel[0], const_uint_2))),
-      guest_pixel[1]);
+  spv::Id sample_v;
+  if (msaa_is_2x_or_4x) {
+    sample_v = expand_pixel_low_bit(guest_pixel[1]);
+    if (!msaa_is_4x) {
+      sample_v = builder_->createBinOp(
+          spv::OpBitwiseOr, type_uint_, sample_v,
+          builder_->createBinOp(spv::OpBitwiseAnd, type_uint_, guest_pixel[0],
+                                const_uint_2));
+    }
+  } else {
+    sample_v = guest_pixel[1];
+  }
   // Restore the host pixel granularity.
   spv::Id sample_coordinates[2] = {sample_u, sample_v};
   for (uint32_t i = 0; i < 2; ++i) {
@@ -2073,7 +2026,8 @@ void SpirvShaderTranslator::FSI_AddPassedMSAASamplesToZPD() {
 }
 
 void SpirvShaderTranslator::FSI_DepthStencilTest(
-    spv::Id msaa_samples, bool sample_mask_potentially_narrowed_previouly) {
+    bool sample_mask_potentially_narrowed_previouly) {
+  uint32_t sample_count = FSI_GetSampleCount();
   bool is_early = FSI_IsDepthStencilEarly();
   bool implicit_early_z_write_allowed =
       current_shader().implicit_early_z_write_allowed();
@@ -2140,12 +2094,9 @@ void SpirvShaderTranslator::FSI_DepthStencilTest(
   }
 
   // Load values involved in depth and stencil testing.
-  spv::Id msaa_is_2x_4x = builder_->createBinOp(
-      spv::OpUGreaterThanEqual, type_bool_, msaa_samples,
-      builder_->makeUintConstant(uint32_t(xenos::MsaaSamples::k2X)));
-  spv::Id msaa_is_4x = builder_->createBinOp(
-      spv::OpUGreaterThanEqual, type_bool_, msaa_samples,
-      builder_->makeUintConstant(uint32_t(xenos::MsaaSamples::k4X)));
+  xenos::MsaaSamples msaa_samples = FSI_GetMsaaSamples();
+  bool msaa_is_2x_4x = msaa_samples >= xenos::MsaaSamples::k2X;
+  bool msaa_is_4x = msaa_samples >= xenos::MsaaSamples::k4X;
   spv::Id depth_is_float24 = builder_->createBinOp(
       spv::OpINotEqual, type_bool_,
       builder_->createBinOp(spv::OpBitwiseAnd, type_uint_,
@@ -2321,7 +2272,7 @@ void SpirvShaderTranslator::FSI_DepthStencilTest(
   // Perform depth and stencil testing for each covered sample.
   spv::Id new_sample_mask = main_fsi_sample_mask_;
   std::array<spv::Id, 4> late_write_depth_stencil{};
-  for (uint32_t i = 0; i < 4; ++i) {
+  for (uint32_t i = 0; i < sample_count; ++i) {
     spv::Id sample_covered = builder_->createBinOp(
         spv::OpINotEqual, type_bool_,
         builder_->createBinOp(spv::OpBitwiseAnd, type_uint_, new_sample_mask,
@@ -2350,30 +2301,19 @@ void SpirvShaderTranslator::FSI_DepthStencilTest(
     std::array<spv::Id, 2> sample_location;
     switch (i) {
       case 0: {
-        // Center sample for no MSAA.
-        // Top-left sample for native 2x (top - 1 in Vulkan), 2x as 4x, 4x
-        // (0 in Vulkan).
-        // 4x on the host case.
-        for (uint32_t j = 0; j < 2; ++j) {
-          sample_location[j] = builder_->makeFloatConstant(
-              draw_util::kD3D10StandardSamplePositions4x[0][j] *
-              (1.0f / 16.0f));
-        }
-        if (native_2x_msaa_no_attachments_) {
-          // 2x on the host case.
+        // The center sample without MSAA, otherwise the top-left one - native
+        // 2x sample 1 in Vulkan, 0 for 2x as 4x and for 4x.
+        if (!msaa_is_2x_4x) {
+          sample_location.fill(const_float_0_);
+        } else {
+          const int8_t* sample_location_int =
+              (!msaa_is_4x && native_2x_msaa_no_attachments_)
+                  ? draw_util::kD3D10StandardSamplePositions2x[1]
+                  : draw_util::kD3D10StandardSamplePositions4x[0];
           for (uint32_t j = 0; j < 2; ++j) {
-            sample_location[j] = builder_->createTriOp(
-                spv::OpSelect, type_float_, msaa_is_4x, sample_location[j],
-                builder_->makeFloatConstant(
-                    draw_util::kD3D10StandardSamplePositions2x[1][j] *
-                    (1.0f / 16.0f)));
+            sample_location[j] = builder_->makeFloatConstant(
+                sample_location_int[j] * (1.0f / 16.0f));
           }
-        }
-        // 1x case.
-        for (uint32_t j = 0; j < 2; ++j) {
-          sample_location[j] =
-              builder_->createTriOp(spv::OpSelect, type_float_, msaa_is_2x_4x,
-                                    sample_location[j], const_float_0_);
         }
       } break;
       case 1: {
@@ -2381,17 +2321,14 @@ void SpirvShaderTranslator::FSI_DepthStencilTest(
         // Vulkan 3 for 2x as 4x.
         // For guest 4x this is the top-right sample since the horizontal
         // sample bit is bit 0, Vulkan 1.
+        const int8_t* sample_location_int =
+            msaa_is_4x ? draw_util::kD3D10StandardSamplePositions4x[1]
+                       : (native_2x_msaa_no_attachments_
+                              ? draw_util::kD3D10StandardSamplePositions2x[0]
+                              : draw_util::kD3D10StandardSamplePositions4x[3]);
         for (uint32_t j = 0; j < 2; ++j) {
-          sample_location[j] = builder_->createTriOp(
-              spv::OpSelect, type_float_, msaa_is_4x,
-              builder_->makeFloatConstant(
-                  draw_util::kD3D10StandardSamplePositions4x[1][j] *
-                  (1.0f / 16.0f)),
-              builder_->makeFloatConstant(
-                  (native_2x_msaa_no_attachments_
-                       ? draw_util::kD3D10StandardSamplePositions2x[0][j]
-                       : draw_util::kD3D10StandardSamplePositions4x[3][j]) *
-                  (1.0f / 16.0f)));
+          sample_location[j] = builder_->makeFloatConstant(
+              sample_location_int[j] * (1.0f / 16.0f));
         }
       } break;
       default: {
@@ -2724,7 +2661,7 @@ void SpirvShaderTranslator::FSI_DepthStencilTest(
     new_sample_mask =
         builder_->createOp(spv::OpPhi, type_uint_, id_vector_temp_);
     if (is_early) {
-      for (uint32_t i = 0; i < 4; ++i) {
+      for (uint32_t i = 0; i < sample_count; ++i) {
         id_vector_temp_.clear();
         id_vector_temp_.push_back(late_write_depth_stencil[i]);
         id_vector_temp_.push_back(block_any_sample_covered_end.getId());
@@ -2739,7 +2676,7 @@ void SpirvShaderTranslator::FSI_DepthStencilTest(
   main_fsi_sample_mask_ = if_depth_stencil_enabled.createMergePhi(
       new_sample_mask, main_fsi_sample_mask_);
   if (is_early) {
-    for (uint32_t i = 0; i < 4; ++i) {
+    for (uint32_t i = 0; i < sample_count; ++i) {
       main_fsi_late_write_depth_stencil_[i] =
           if_depth_stencil_enabled.createMergePhi(late_write_depth_stencil[i],
                                                   const_uint_0_);
@@ -4213,95 +4150,41 @@ void SpirvShaderTranslator::FSI_AlphaToMask() {
                                     id_vector_temp_),
         spv::NoPrecision);
 
-    // Load MSAA sample count
-    spv::Id msaa_samples = LoadMsaaSamplesFromFlags();
-
-    // Create blocks for MSAA sample count selection
-    spv::Block& block_msaa_1x = builder_->makeNewBlock();
-    spv::Block& block_msaa_2x_actual = builder_->makeNewBlock();
-    spv::Block& block_msaa_4x = builder_->makeNewBlock();
-    spv::Block& block_msaa_check_2x = builder_->makeNewBlock();
-    spv::Block& block_msaa_merge = builder_->makeNewBlock();
-    spv::Block& block_msaa_merge_2x_1x = builder_->makeNewBlock();
-
-    // Check if 4x MSAA
-    spv::Id is_4x = builder_->createBinOp(
-        spv::OpIEqual, type_bool_, msaa_samples, builder_->makeUintConstant(2));
-
-    // Create selection for MSAA mode
-    builder_->createSelectionMerge(&block_msaa_merge,
-                                   spv::SelectionControlDontFlattenMask);
-    builder_->createConditionalBranch(is_4x, &block_msaa_4x,
-                                      &block_msaa_check_2x);
-
-    // 4x MSAA path
-    builder_->setBuildPoint(&block_msaa_4x);
-    spv::Id coverage_4x = main_fsi_sample_mask_;
-    FSI_AlphaToMaskSample(false, 0, 0.75f, threshold_offset, 1.0f / 16.0f,
-                          alpha, coverage_4x);
-    FSI_AlphaToMaskSample(false, 1, 0.25f, threshold_offset, 1.0f / 16.0f,
-                          alpha, coverage_4x);
-    FSI_AlphaToMaskSample(false, 2, 0.5f, threshold_offset, 1.0f / 16.0f, alpha,
-                          coverage_4x);
-    FSI_AlphaToMaskSample(false, 3, 1.0f, threshold_offset, 1.0f / 16.0f, alpha,
-                          coverage_4x);
-    builder_->createBranch(&block_msaa_merge);
-
-    // Check if 2x or 1x MSAA
-    builder_->setBuildPoint(&block_msaa_check_2x);
-    spv::Id is_2x = builder_->createBinOp(
-        spv::OpIEqual, type_bool_, msaa_samples, builder_->makeUintConstant(1));
-    builder_->createSelectionMerge(&block_msaa_merge_2x_1x,
-                                   spv::SelectionControlDontFlattenMask);
-    builder_->createConditionalBranch(is_2x, &block_msaa_2x_actual,
-                                      &block_msaa_1x);
-
-    // 2x MSAA path
-    builder_->setBuildPoint(&block_msaa_2x_actual);
-    spv::Id coverage_2x = main_fsi_sample_mask_;
-    FSI_AlphaToMaskSample(false, 0, 0.5f, threshold_offset, 1.0f / 8.0f, alpha,
-                          coverage_2x);
-    FSI_AlphaToMaskSample(false, 1, 1.0f, threshold_offset, 1.0f / 8.0f, alpha,
-                          coverage_2x);
-    builder_->createBranch(&block_msaa_merge_2x_1x);
-
-    // 1x MSAA path
-    builder_->setBuildPoint(&block_msaa_1x);
-    spv::Id coverage_1x = main_fsi_sample_mask_;
-    FSI_AlphaToMaskSample(false, 0, 1.0f, threshold_offset, 1.0f / 4.0f, alpha,
-                          coverage_1x);
-    builder_->createBranch(&block_msaa_merge_2x_1x);
-
-    // Merge 2x/1x MSAA paths
-    builder_->setBuildPoint(&block_msaa_merge_2x_1x);
-    id_vector_temp_.clear();
-    id_vector_temp_.push_back(coverage_2x);
-    id_vector_temp_.push_back(block_msaa_2x_actual.getId());
-    id_vector_temp_.push_back(coverage_1x);
-    id_vector_temp_.push_back(block_msaa_1x.getId());
-    spv::Id coverage_2x_1x =
-        builder_->createOp(spv::OpPhi, type_uint_, id_vector_temp_);
-    builder_->createBranch(&block_msaa_merge);
-
-    // Merge MSAA paths with PHI
-    builder_->setBuildPoint(&block_msaa_merge);
-    id_vector_temp_.clear();
-    id_vector_temp_.push_back(coverage_4x);
-    id_vector_temp_.push_back(block_msaa_4x.getId());
-    id_vector_temp_.push_back(coverage_2x_1x);
-    id_vector_temp_.push_back(block_msaa_merge_2x_1x.getId());
-    spv::Id coverage_final =
-        builder_->createOp(spv::OpPhi, type_uint_, id_vector_temp_);
+    // Only this shader's own samples and dithering thresholds are emitted.
+    spv::Id coverage = main_fsi_sample_mask_;
+    switch (FSI_GetMsaaSamples()) {
+      case xenos::MsaaSamples::k4X:
+        FSI_AlphaToMaskSample(false, 0, 0.75f, threshold_offset, 1.0f / 16.0f,
+                              alpha, coverage);
+        FSI_AlphaToMaskSample(false, 1, 0.25f, threshold_offset, 1.0f / 16.0f,
+                              alpha, coverage);
+        FSI_AlphaToMaskSample(false, 2, 0.5f, threshold_offset, 1.0f / 16.0f,
+                              alpha, coverage);
+        FSI_AlphaToMaskSample(false, 3, 1.0f, threshold_offset, 1.0f / 16.0f,
+                              alpha, coverage);
+        break;
+      case xenos::MsaaSamples::k2X:
+        FSI_AlphaToMaskSample(false, 0, 0.5f, threshold_offset, 1.0f / 8.0f,
+                              alpha, coverage);
+        FSI_AlphaToMaskSample(false, 1, 1.0f, threshold_offset, 1.0f / 8.0f,
+                              alpha, coverage);
+        break;
+      default:
+        FSI_AlphaToMaskSample(false, 0, 1.0f, threshold_offset, 1.0f / 4.0f,
+                              alpha, coverage);
+        break;
+    }
 
     // Branch to main merge
+    spv::Block* block_alpha_enabled_end = builder_->getBuildPoint();
     builder_->createBranch(&block_merge);
 
     // Continue from merge block with PHI for the final mask
     builder_->setBuildPoint(&block_merge);
     id_vector_temp_.clear();
-    id_vector_temp_.push_back(coverage_final);
+    id_vector_temp_.push_back(coverage);
     id_vector_temp_.push_back(
-        block_msaa_merge.getId());  // Coming from the alpha enabled path
+        block_alpha_enabled_end->getId());  // Coming from the enabled path
     id_vector_temp_.push_back(mask_before);
     id_vector_temp_.push_back(
         block_before->getId());  // Coming from the disabled path

@@ -237,6 +237,14 @@ std::vector<uint8_t> SpirvShaderTranslator::CreateDepthOnlyFragmentShader(
   return translation.translated_binary();
 }
 
+std::vector<uint8_t> SpirvShaderTranslator::CreateDepthOnlyFragmentShader(
+    xenos::MsaaSamples fsi_msaa_samples) {
+  // The sample count lives in depth_stencil_mode's bits on the FSI path.
+  Modification modification(0);
+  modification.pixel.set_fsi_msaa_samples(fsi_msaa_samples);
+  return CreateDepthOnlyFragmentShader(modification.pixel.depth_stencil_mode);
+}
+
 void SpirvShaderTranslator::Reset() {
   ShaderTranslator::Reset();
 
@@ -3421,11 +3429,10 @@ void SpirvShaderTranslator::StartFragmentShaderInMain() {
   }
 
   if (edram_fragment_shader_interlock_ && FSI_IsDepthStencilEarly()) {
-    spv::Id msaa_samples = LoadMsaaSamplesFromFlags();
-    FSI_LoadSampleMask(msaa_samples);
-    FSI_LoadEdramOffsets(msaa_samples);
+    FSI_LoadSampleMask();
+    FSI_LoadEdramOffsets();
     builder_->createNoResultOp(spv::OpBeginInvocationInterlockEXT);
-    FSI_DepthStencilTest(msaa_samples, false);
+    FSI_DepthStencilTest(false);
     if (!is_depth_only_fragment_shader_) {
       // Skip the rest of the shader if the whole quad (due to derivatives) has
       // failed the depth / stencil test, and there are no depth and stencil

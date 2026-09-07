@@ -41,7 +41,7 @@ class SpirvShaderTranslator : public ShaderTranslator {
     // version number! Backends add it to their dated
     // PipelineDescription::kVersion, so bumping either one is enough. Only
     // ever raise it, a reverted layout change needs another bump.
-    static constexpr uint32_t kVersion = 20;
+    static constexpr uint32_t kVersion = 21;
 
     enum class DepthStencilMode : uint32_t {
       kNoModifiers,
@@ -114,7 +114,9 @@ class SpirvShaderTranslator : public ShaderTranslator {
       // must not be set for other primitive types - enables the point sprite
       // coordinates input, and also effects the flag bits in PsParamGen.
       uint32_t param_gen_point : 1;
-      // For host render targets - depth / stencil output mode.
+      // For host render targets - depth / stencil output mode. The FSI path
+      // has no such state, so it aliases these bits as fsi_msaa_samples. The
+      // two paths are mutually exclusive per device.
       DepthStencilMode depth_stencil_mode : 3;
       // For host render targets with MIN/MAX blend op - the source blend factor
       // to pre-multiply the shader output by (since Vulkan/D3D12 MIN/MAX
@@ -132,6 +134,19 @@ class SpirvShaderTranslator : public ShaderTranslator {
       // from the draw. This is only set when the draw is native because of a
       // set scale threshold (FBO only).
       uint32_t resolution_scale_native : 1;
+
+      // FSI path, aliasing depth_stencil_mode.
+      xenos::MsaaSamples fsi_msaa_samples() const {
+        return xenos::MsaaSamples(uint32_t(depth_stencil_mode));
+      }
+      void set_fsi_msaa_samples(xenos::MsaaSamples msaa_samples) {
+        static_assert(xenos::kMsaaSamplesBits <= 3,
+                      "The sample count has to fit in depth_stencil_mode");
+        // The per-sample code is emitted for 1 << this many samples, and the
+        // render target cache rejects the draw above 4x before this is read.
+        assert_true(msaa_samples <= xenos::MsaaSamples::k4X);
+        depth_stencil_mode = DepthStencilMode(uint32_t(msaa_samples));
+      }
     } pixel;
     uint64_t value = 0;
 
@@ -507,8 +522,11 @@ class SpirvShaderTranslator : public ShaderTranslator {
   // writes the result to gl_FragDepth - matching the substitute pixel shader
   // the DXBC backend uses when a guest draw has no pixel shader.
   std::vector<uint8_t> CreateDepthOnlyFragmentShader(
-      Modification::DepthStencilMode depth_stencil_mode =
-          Modification::DepthStencilMode::kNoModifiers);
+      Modification::DepthStencilMode depth_stencil_mode);
+  // FSI variant - specialized for one guest sample count instead of a host
+  // depth / stencil mode.
+  std::vector<uint8_t> CreateDepthOnlyFragmentShader(
+      xenos::MsaaSamples fsi_msaa_samples);
 
   // Common functions useful not only for the translator, but also for EDRAM
   // emulation via conventional render targets.
@@ -853,6 +871,17 @@ class SpirvShaderTranslator : public ShaderTranslator {
                           spv::Id sampler, spv::Id is_all_signed);
 
   spv::Id LoadMsaaSamplesFromFlags();
+  // The guest sample count baked into the modification, so the MSAA dependent
+  // code is emitted for that count alone rather than selected at runtime.
+  xenos::MsaaSamples FSI_GetMsaaSamples() const {
+    assert_true(edram_fragment_shader_interlock_);
+    return GetSpirvShaderModification().pixel.fsi_msaa_samples();
+  }
+  // Guest samples per pixel - how many of main_fsi_sample_mask_'s per-sample
+  // bits and of the EDRAM ROP code are meaningful.
+  uint32_t FSI_GetSampleCount() const {
+    return uint32_t(1) << uint32_t(FSI_GetMsaaSamples());
+  }
   // Whether it's possible and worth skipping running the translated shader for
   // 2x2 quads.
   bool FSI_IsDepthStencilEarly() const {
@@ -861,16 +890,15 @@ class SpirvShaderTranslator : public ShaderTranslator {
            !current_shader().writes_depth() &&
            !current_shader().memexport_eM_written();
   }
-  void FSI_LoadSampleMask(spv::Id msaa_samples);
-  void FSI_LoadEdramOffsets(spv::Id msaa_samples);
+  void FSI_LoadSampleMask();
+  void FSI_LoadEdramOffsets();
   // The address must be a signed int. Whether the render target is 64bpp, if
   // present at all, must be a bool (if it's NoResult, 32bpp will be assumed).
   spv::Id FSI_AddSampleOffset(spv::Id sample_0_address, uint32_t sample_index,
                               spv::Id is_64bpp = spv::NoResult);
   // Updates main_fsi_sample_mask_. Must be called outside non-uniform control
   // flow because of taking derivatives of the fragment depth.
-  void FSI_DepthStencilTest(spv::Id msaa_samples,
-                            bool sample_mask_potentially_narrowed_previouly);
+  void FSI_DepthStencilTest(bool sample_mask_potentially_narrowed_previouly);
 
   // Adds the surviving coverage MSAA counts from FSI to the active ZPD counter
   // slot after final PS depth/stencil.

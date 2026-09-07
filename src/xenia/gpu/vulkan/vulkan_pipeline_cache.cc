@@ -131,19 +131,23 @@ bool VulkanPipelineCache::Initialize() {
   }
 
   if (edram_fragment_shader_interlock) {
-    std::vector<uint8_t> depth_only_fragment_shader_code =
-        guest_shader_cache_.translator().CreateDepthOnlyFragmentShader();
-    depth_only_fragment_shader_ = ui::vulkan::util::CreateShaderModule(
-        vulkan_device,
-        reinterpret_cast<const uint32_t*>(
-            depth_only_fragment_shader_code.data()),
-        depth_only_fragment_shader_code.size());
-    if (depth_only_fragment_shader_ == VK_NULL_HANDLE) {
-      XELOGE(
-          "VulkanPipelineCache: Failed to create the depth/stencil-only "
-          "fragment shader for the fragment shader interlock render backend "
-          "implementation");
-      return false;
+    for (size_t i = 0; i < xe::countof(depth_only_fragment_shaders_); ++i) {
+      std::vector<uint8_t> depth_only_fragment_shader_code =
+          guest_shader_cache_.translator().CreateDepthOnlyFragmentShader(
+              xenos::MsaaSamples(i));
+      depth_only_fragment_shaders_[i] = ui::vulkan::util::CreateShaderModule(
+          vulkan_device,
+          reinterpret_cast<const uint32_t*>(
+              depth_only_fragment_shader_code.data()),
+          depth_only_fragment_shader_code.size());
+      if (depth_only_fragment_shaders_[i] == VK_NULL_HANDLE) {
+        XELOGE(
+            "VulkanPipelineCache: Failed to create the {}-sample "
+            "depth/stencil-only fragment shader for the fragment shader "
+            "interlock render backend implementation",
+            UINT32_C(1) << i);
+        return false;
+      }
     }
   }
 
@@ -151,7 +155,10 @@ bool VulkanPipelineCache::Initialize() {
   // conversion is active - keep the depth buffer's encoding consistent with
   // PS-converted draws (matches the DXBC backend's
   // float24_{truncate,round}_ps).
-  if (render_target_cache_.depth_float24_convert_in_pixel_shader()) {
+  // Not on the FSI path - it converts the depth in the EDRAM ROP itself, and
+  // the modification keeps the sample count where the mode would be.
+  if (!edram_fragment_shader_interlock &&
+      render_target_cache_.depth_float24_convert_in_pixel_shader()) {
     using DepthStencilMode =
         SpirvShaderTranslator::Modification::DepthStencilMode;
     auto build = [&](DepthStencilMode mode, VkShaderModule& out) -> bool {
@@ -367,8 +374,11 @@ void VulkanPipelineCache::Shutdown() {
   }
 
   // Destroy all internal shaders.
-  ui::vulkan::util::DestroyAndNullHandle(dfn.vkDestroyShaderModule, device,
-                                         depth_only_fragment_shader_);
+  for (VkShaderModule& depth_only_fragment_shader :
+       depth_only_fragment_shaders_) {
+    ui::vulkan::util::DestroyAndNullHandle(dfn.vkDestroyShaderModule, device,
+                                           depth_only_fragment_shader);
+  }
   ui::vulkan::util::DestroyAndNullHandle(dfn.vkDestroyShaderModule, device,
                                          float24_truncate_fragment_shader_);
   ui::vulkan::util::DestroyAndNullHandle(dfn.vkDestroyShaderModule, device,
@@ -1836,7 +1846,8 @@ bool VulkanPipelineCache::EnsurePipelineCreated(
     }
   } else {
     if (edram_fragment_shader_interlock) {
-      shader_stage_fragment.module = depth_only_fragment_shader_;
+      shader_stage_fragment.module = depth_only_fragment_shaders_[size_t(
+          description.render_pass_key.msaa_samples)];
     } else if (render_target_cache_.depth_float24_convert_in_pixel_shader() &&
                (description.depth_write_enable ||
                 description.depth_compare_op !=

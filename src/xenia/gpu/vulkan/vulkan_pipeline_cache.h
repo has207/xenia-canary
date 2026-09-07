@@ -479,7 +479,9 @@ class VulkanPipelineCache : public GuestSpirvShaderCache::Host {
 
   // Empty depth-only pixel shader for writing to depth buffer using fragment
   // shader interlock when no Xenos pixel shader provided.
-  VkShaderModule depth_only_fragment_shader_ = VK_NULL_HANDLE;
+  // One per guest sample count - FSI shaders are specialized for it.
+  VkShaderModule
+      depth_only_fragment_shaders_[size_t(xenos::MsaaSamples::k4X) + 1] = {};
 
   // Substitute depth-only pixel shaders that perform float24 conversion of the
   // rasterizer's depth, bound for guest depth-only draws when in-PS float24
