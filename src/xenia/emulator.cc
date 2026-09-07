@@ -1720,12 +1720,26 @@ bool Emulator::ExceptionCallbackThunk(Exception* ex, void* data) {
   }
 }
 
+// Resumes the faulting thread inside a halt thunk. Diverting rip keeps the
+// fault's rsp, so realign to the rsp%16 == 8 a call leaves, or the thunk's
+// aligned SSE spills fault. The null slot ends a stack walk. AArch64 sp is
+// always aligned.
+static void DivertToHaltThunk(Exception* ex, void (*thunk)()) {
+#if XE_ARCH_AMD64
+  uint64_t& rsp = ex->ModifyIntRegister(
+      uint32_t(X64Register::kRsp) - uint32_t(X64Register::kIntRegisterFirst));
+  rsp = (rsp & ~uint64_t(15)) - 8;
+  *reinterpret_cast<uint64_t*>(rsp) = 0;
+#endif  // XE_ARCH_AMD64
+  ex->set_resume_pc(reinterpret_cast<uint64_t>(thunk));
+}
+
 bool Emulator::ExceptionCallback(Exception* ex) {
   // In-process relaunch/reset frees state under still-running guest threads;
   // their faults are expected, so park them instead of crashing. The teardown
   // thread isn't a guest thread, so its own faults still surface.
   if (relaunching_ && kernel::XThread::IsInThread()) {
-    ex->set_resume_pc(reinterpret_cast<uint64_t>(&HaltDuringRelaunchThunk));
+    DivertToHaltThunk(ex, &HaltDuringRelaunchThunk);
     return true;
   }
 
@@ -1807,7 +1821,7 @@ bool Emulator::ExceptionCallback(Exception* ex) {
           fiber_self->handle(), fiber_self->thread_id(), code_name,
           fault_detail, ex->pc(), module_offset, guest_lr, host_sp,
           host_sp % 16);
-      ex->set_resume_pc(reinterpret_cast<uint64_t>(&HaltCrashedFiberThunk));
+      DivertToHaltThunk(ex, &HaltCrashedFiberThunk);
       return true;
     }
     return false;
@@ -1889,7 +1903,7 @@ bool Emulator::ExceptionCallback(Exception* ex) {
   // mode suspends self. Fiber mode diverts the resume PC to a halt thunk, since
   // calling Suspend here would yield from inside the exception handler.
   if (current_thread->fiber()) {
-    ex->set_resume_pc(reinterpret_cast<uint64_t>(&HaltCrashedFiberThunk));
+    DivertToHaltThunk(ex, &HaltCrashedFiberThunk);
     return true;
   }
   current_thread->Suspend(nullptr);
