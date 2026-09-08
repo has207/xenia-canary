@@ -288,9 +288,17 @@ bool VulkanPipelineCache::Initialize() {
     // Pick some reasonable amount if couldn't determine the number of cores.
     logical_processor_count = 6;
   }
-  creation_completion_event_ =
-      xe::threading::Event::CreateManualResetEvent(true);
-  assert_not_null(creation_completion_event_);
+  creation_queue_.Initialize(
+      "Vulkan Pipelines",
+      [this](const PipelineCreationArguments& creation_arguments,
+             SpirvShaderTranslator* worker_translator) {
+        return CreateQueuedPipeline(creation_arguments, worker_translator);
+      },
+      [this](const PipelineCreationArguments& creation_arguments,
+             VkPipeline pipeline) {
+        StoreCreatedPipeline(creation_arguments, pipeline, false);
+      },
+      [this]() { return guest_shader_cache_.CreateWorkerTranslator(); });
   if (cvars::vulkan_pipeline_creation_threads != 0) {
     size_t creation_thread_count;
     if (cvars::vulkan_pipeline_creation_threads < 0) {
@@ -301,14 +309,7 @@ bool VulkanPipelineCache::Initialize() {
           std::min(uint32_t(cvars::vulkan_pipeline_creation_threads),
                    logical_processor_count);
     }
-    creation_threads_shutdown_ = false;
-    for (size_t i = 0; i < creation_thread_count; ++i) {
-      std::unique_ptr<xe::threading::Thread> creation_thread =
-          xe::threading::Thread::Create({}, [this]() { CreationThread(); });
-      assert_not_null(creation_thread);
-      creation_thread->set_name("Vulkan Pipelines");
-      creation_threads_.push_back(std::move(creation_thread));
-    }
+    creation_queue_.SetThreadCount(creation_thread_count);
   }
 
   return true;
@@ -319,26 +320,11 @@ void VulkanPipelineCache::Shutdown() {
   ShutdownShaderStorage();
 
   // Shut down all threads, before destroying the pipelines since they may be
-  // creating them.
-  if (!creation_threads_.empty()) {
-    {
-      std::lock_guard<std::mutex> lock(creation_request_lock_);
-      creation_threads_shutdown_ = true;
-    }
-    creation_request_cond_.notify_all();
-    for (size_t i = 0; i < creation_threads_.size(); ++i) {
-      xe::threading::Wait(creation_threads_[i].get(), false);
-    }
-    creation_threads_.clear();
-  }
-  // Clear any pending completion callback (may capture 'this') and reset
-  // startup state.
-  {
-    std::lock_guard<std::mutex> lock(creation_request_lock_);
-    creation_completion_callback_ = nullptr;
-  }
+  // creating them. Also drops the pending completion callback, which may
+  // capture 'this'.
+  std::vector<std::pair<PipelineCreationArguments, VkPipeline>> parked =
+      creation_queue_.Shutdown();
   startup_loading_ = false;
-  creation_completion_event_.reset();
 
   const ui::vulkan::VulkanDevice* const vulkan_device =
       command_processor_.GetVulkanDevice();
@@ -357,21 +343,12 @@ void VulkanPipelineCache::Shutdown() {
     deferred_destroy_pipelines_.clear();
   }
 
-  // The creation threads are joined without draining the queue, so drop what is
-  // left before the entries it refers to are destroyed below.
-  while (!creation_queue_.empty()) {
-    creation_queue_.pop();
-  }
-  // Nothing can be parked for publishing any more either - destroy whatever was
-  // still held back.
-  for (const auto& parked : publish_parked_) {
-    if (parked.second.second != VK_NULL_HANDLE) {
-      dfn.vkDestroyPipeline(device, parked.second.second, nullptr);
+  // Nothing will publish what the creation threads held back, so destroy it.
+  for (const auto& publication : parked) {
+    if (publication.second != VK_NULL_HANDLE) {
+      dfn.vkDestroyPipeline(device, publication.second, nullptr);
     }
   }
-  publish_parked_.clear();
-  publish_cursor_ = 1;
-  publish_seq_next_ = 1;
 
   // Destroy all pipelines.
   last_pipeline_ = nullptr;
@@ -537,7 +514,7 @@ bool VulkanPipelineCache::EnsureShadersTranslated(
 }
 
 bool VulkanPipelineCache::CanCreatePipelineAsync(bool has_pixel_shader) const {
-  return cvars::async_shader_compilation && !creation_threads_.empty() &&
+  return cvars::async_shader_compilation && creation_queue_.has_threads() &&
          has_pixel_shader && placeholder_pixel_shader_ != VK_NULL_HANDLE;
 }
 
@@ -753,24 +730,17 @@ bool VulkanPipelineCache::ConfigurePipeline(
     }
 
     // Queue the real pipeline creation in the background.
-    {
-      std::lock_guard<std::mutex> lock(creation_request_lock_);
-      PipelineCreationArguments creation_arguments;
-      creation_arguments.pipeline = &pipeline_pair;
-      creation_arguments.vertex_shader = vertex_shader;
-      creation_arguments.pixel_shader = pixel_shader;
-      creation_arguments.geometry_shader = geometry_shader;
-      creation_arguments.tessellation_vertex_shader =
-          tessellation_vertex_shader;
-      creation_arguments.tessellation_control_shader =
-          tessellation_control_shader;
-      creation_arguments.render_pass = render_pass;
-      creation_arguments.render_pass_key = render_pass_key;
-      // Queued and numbered together, so the publish order matches draw order.
-      creation_arguments.publish_seq = publish_seq_next_++;
-      creation_queue_.push(creation_arguments);
-    }
-    creation_request_cond_.notify_one();
+    PipelineCreationArguments creation_arguments;
+    creation_arguments.pipeline = &pipeline_pair;
+    creation_arguments.vertex_shader = vertex_shader;
+    creation_arguments.pixel_shader = pixel_shader;
+    creation_arguments.geometry_shader = geometry_shader;
+    creation_arguments.tessellation_vertex_shader = tessellation_vertex_shader;
+    creation_arguments.tessellation_control_shader =
+        tessellation_control_shader;
+    creation_arguments.render_pass = render_pass;
+    creation_arguments.render_pass_key = render_pass_key;
+    creation_queue_.Push(creation_arguments);
   } else {
     // Sync mode (no creation threads / async off / no pixel shader): translate
     // on this thread and create the pipeline immediately.
@@ -815,139 +785,64 @@ void VulkanPipelineCache::EndSubmission() {
     pipeline_storage_file_flush_needed_ = false;
   }
 
-  if (creation_threads_.empty()) {
-    // Process deferred destructions when GPU is idle
-    ProcessDeferredDestructions();
-    return;
-  }
-
-  if (startup_loading_) {
-    // Non-blocking: let background threads work asynchronously.
-    creation_request_cond_.notify_one();
-  } else {
-    // Blocking: wait for all queued pipelines.
-    bool await_creation_completion_event;
-    {
-      std::lock_guard<std::mutex> lock(creation_request_lock_);
-      await_creation_completion_event =
-          !creation_queue_.empty() || creation_threads_busy_ != 0;
-      if (await_creation_completion_event) {
-        creation_completion_event_->Reset();
-        creation_completion_set_event_.store(true, std::memory_order_release);
-      }
-    }
-    if (await_creation_completion_event) {
-      creation_request_cond_.notify_one();
-      xe::threading::Wait(creation_completion_event_.get(), false);
+  if (creation_queue_.has_threads()) {
+    if (startup_loading_) {
+      // Non-blocking: let background threads work asynchronously.
+      creation_queue_.Notify();
+    } else {
+      // Blocking: wait for all queued pipelines.
+      creation_queue_.AwaitCompletion();
     }
   }
 
-  // Process deferred destructions
+  // Process deferred destructions when the GPU is idle.
   ProcessDeferredDestructions();
 }
 
 bool VulkanPipelineCache::IsCreatingPipelines() {
-  if (creation_threads_.empty()) {
-    return false;
-  }
-  std::lock_guard<std::mutex> lock(creation_request_lock_);
-  return !creation_queue_.empty() || creation_threads_busy_ != 0;
+  return creation_queue_.IsBusy();
 }
 
 void VulkanPipelineCache::AwaitPipelineCompletion() {
-  if (creation_threads_.empty()) {
-    return;
-  }
-
-  bool await_creation_completion_event;
-  {
-    std::lock_guard<std::mutex> lock(creation_request_lock_);
-    await_creation_completion_event =
-        !creation_queue_.empty() || creation_threads_busy_ != 0;
-    if (await_creation_completion_event) {
-      creation_completion_event_->Reset();
-      creation_completion_set_event_.store(true, std::memory_order_release);
-    }
-  }
-
-  if (await_creation_completion_event) {
-    creation_request_cond_.notify_one();
-    xe::threading::Wait(creation_completion_event_.get(), false);
-  }
+  creation_queue_.AwaitCompletion();
 }
 
-void VulkanPipelineCache::CreationThread() {
-  // Per-thread worker translator - the shared SpirvShaderTranslator is not
-  // thread-safe, so the deferred ucode->SPIR-V build (VS interpreter
-  // placeholder) runs here, off the main thread, one translator per creation
-  // thread.
-  std::unique_ptr<SpirvShaderTranslator> worker_translator =
-      guest_shader_cache_.CreateWorkerTranslator();
-
-  for (;;) {
-    PipelineCreationArguments creation_arguments;
-    {
-      std::unique_lock<std::mutex> lock(creation_request_lock_);
-      creation_request_cond_.wait(lock, [this]() {
-        return !creation_queue_.empty() || creation_threads_shutdown_;
-      });
-      if (creation_threads_shutdown_) {
-        break;
-      }
-      creation_arguments = creation_queue_.front();
-      creation_queue_.pop();
-      ++creation_threads_busy_;
+VkPipeline VulkanPipelineCache::CreateQueuedPipeline(
+    const PipelineCreationArguments& creation_arguments,
+    SpirvShaderTranslator* worker_translator) {
+  VkPipeline created_pipeline = VK_NULL_HANDLE;
+  const char* failed_stage = nullptr;
+  if (!EnsureShadersTranslated(creation_arguments.vertex_shader,
+                               creation_arguments.pixel_shader,
+                               worker_translator)) {
+    failed_stage = "shader translation";
+  } else {
+    // Async pipelines are created with a minimal (no-texture) layout on the
+    // draw thread since their shaders weren't translated there (interpreter
+    // placeholder, or drop-until-ready with no placeholder). Now that they're
+    // translated, compute the real layout before creating the real pipeline.
+    // Idempotent when the layout was already real (real-VS placeholder path).
+    const PipelineLayoutProvider* real_layout = GetGuestGraphicsPipelineLayout(
+        creation_arguments.vertex_shader, creation_arguments.pixel_shader);
+    if (real_layout) {
+      creation_arguments.pipeline->second.pipeline_layout.store(
+          real_layout, std::memory_order_release);
     }
-
-    VkPipeline created_pipeline = VK_NULL_HANDLE;
-    if (!EnsureShadersTranslated(creation_arguments.vertex_shader,
-                                 creation_arguments.pixel_shader,
-                                 worker_translator.get())) {
-      XELOGE("Failed to translate shaders for pipeline creation");
-    } else {
-      // Async pipelines are created with a minimal (no-texture) layout on the
-      // draw thread since their shaders weren't translated there (interpreter
-      // placeholder, or drop-until-ready with no placeholder). Now that they're
-      // translated, compute the real layout before creating the real pipeline.
-      // Idempotent when the layout was already real (real-VS placeholder path).
-      const PipelineLayoutProvider* real_layout =
-          GetGuestGraphicsPipelineLayout(creation_arguments.vertex_shader,
-                                         creation_arguments.pixel_shader);
-      if (real_layout) {
-        creation_arguments.pipeline->second.pipeline_layout.store(
-            real_layout, std::memory_order_release);
-      }
-      if (!EnsurePipelineCreated(creation_arguments, VK_NULL_HANDLE,
-                                 VK_NULL_HANDLE, &created_pipeline)) {
-        XELOGE("Failed to create Vulkan pipeline");
-      }
-    }
-    // Runs even with nothing created: the reorder buffer has to advance past a
-    // failure, or every later pipeline waits on it forever.
-    PublishCreatedPipeline(creation_arguments, created_pipeline);
-
-    {
-      std::unique_lock<std::mutex> lock(creation_request_lock_);
-      --creation_threads_busy_;
-      if (creation_threads_busy_ == 0 && creation_queue_.empty()) {
-        // All pipelines created.
-        if (creation_completion_set_event_.load(std::memory_order_acquire)) {
-          // Signal the event (blocking mode).
-          creation_completion_set_event_.store(false,
-                                               std::memory_order_release);
-          creation_completion_event_->Set();
-        }
-        if (creation_completion_callback_) {
-          // Invoke completion callback (non-blocking mode).
-          auto callback = std::move(creation_completion_callback_);
-          creation_completion_callback_ = nullptr;
-          lock.unlock();
-          callback();
-          lock.lock();
-        }
-      }
+    if (!EnsurePipelineCreated(creation_arguments, VK_NULL_HANDLE,
+                               VK_NULL_HANDLE, &created_pipeline)) {
+      failed_stage = "pipeline creation";
     }
   }
+  if (failed_stage) {
+    // Many of EnsurePipelineCreated's failure paths log nothing, so this is
+    // the only trace of what went wrong for most of them.
+    XELOGE("Async {} failed (VS {:016X}, PS {:016X})", failed_stage,
+           creation_arguments.vertex_shader->shader().ucode_data_hash(),
+           creation_arguments.pixel_shader
+               ? creation_arguments.pixel_shader->shader().ucode_data_hash()
+               : 0);
+  }
+  return created_pipeline;
 }
 
 bool VulkanPipelineCache::TranslateAnalyzedShader(
@@ -2310,45 +2205,25 @@ bool VulkanPipelineCache::EnsurePipelineCreated(
   return true;
 }
 
-void VulkanPipelineCache::PublishCreatedPipeline(
-    const PipelineCreationArguments& creation_arguments, VkPipeline pipeline) {
-  if (!creation_arguments.publish_seq) {
-    // Storage warm-up: nothing is drawing these yet, so ordering them would
-    // only delay them.
-    StoreCreatedPipeline(creation_arguments, pipeline, false);
-    return;
-  }
-  // Park it and take over whatever run of publishes this completes. The stores
-  // run outside the lock - one of them may take deferred_destroy_mutex_.
-  std::vector<std::pair<PipelineCreationArguments, VkPipeline>> to_publish;
-  {
-    std::lock_guard<std::mutex> lock(publish_lock_);
-    publish_parked_.emplace(creation_arguments.publish_seq,
-                            std::make_pair(creation_arguments, pipeline));
-    auto it = publish_parked_.begin();
-    while (it != publish_parked_.end() && it->first == publish_cursor_) {
-      to_publish.push_back(std::move(it->second));
-      it = publish_parked_.erase(it);
-      ++publish_cursor_;
-    }
-  }
-  for (auto& publish : to_publish) {
-    StoreCreatedPipeline(publish.first, publish.second, false);
-  }
-}
-
 void VulkanPipelineCache::StoreCreatedPipeline(
     const PipelineCreationArguments& creation_arguments, VkPipeline pipeline,
     bool creating_placeholder) {
   if (pipeline == VK_NULL_HANDLE) {
-    // Creation failed. If a placeholder exists it will remain in use
-    // permanently - clear the flag so we're not in a misleading "waiting for
-    // real" state.
-    if (creation_arguments.pipeline->second.is_placeholder.load(
-            std::memory_order_acquire)) {
-      XELOGW(
-          "Real pipeline creation failed - placeholder will remain in use "
-          "(may cause visual artifacts)");
+    // Nothing else will be created for this entry, so say what it is left as.
+    // Clearing the flag also stops it reporting as "waiting for real" forever,
+    // which would hang an occlusion-query await.
+    const bool had_placeholder =
+        creation_arguments.pipeline->second.is_placeholder.load(
+            std::memory_order_acquire);
+    XELOGE(
+        "Pipeline stuck for the rest of the run, {} (VS {:016X}, PS {:016X})",
+        had_placeholder ? "drawing through its placeholder"
+                        : "its draws skipped",
+        creation_arguments.vertex_shader->shader().ucode_data_hash(),
+        creation_arguments.pixel_shader
+            ? creation_arguments.pixel_shader->shader().ucode_data_hash()
+            : 0);
+    if (had_placeholder) {
       creation_arguments.pipeline->second.is_placeholder.store(
           false, std::memory_order_release);
     }
@@ -2692,70 +2567,37 @@ void VulkanPipelineCache::InitializeShaderStorage(
           *pipelines_.emplace(pipeline_description, Pipeline(pipeline_layout))
                .first;
 
-      // Queue for creation.
-      if (!creation_threads_.empty()) {
-        std::lock_guard<std::mutex> lock(creation_request_lock_);
-        PipelineCreationArguments creation_arguments;
-        creation_arguments.pipeline = &pipeline_pair;
-        creation_arguments.vertex_shader = vertex_translation;
-        creation_arguments.pixel_shader = pixel_translation;
-        creation_arguments.geometry_shader = geometry_shader;
-        creation_arguments.tessellation_vertex_shader =
-            tessellation_vertex_shader;
-        creation_arguments.tessellation_control_shader =
-            tessellation_control_shader;
-        creation_arguments.render_pass = render_pass;
-        creation_arguments.render_pass_key =
-            pipeline_description.render_pass_key;
-        creation_queue_.push(creation_arguments);
-        creation_request_cond_.notify_one();
+      PipelineCreationArguments creation_arguments;
+      creation_arguments.pipeline = &pipeline_pair;
+      creation_arguments.vertex_shader = vertex_translation;
+      creation_arguments.pixel_shader = pixel_translation;
+      creation_arguments.geometry_shader = geometry_shader;
+      creation_arguments.tessellation_vertex_shader =
+          tessellation_vertex_shader;
+      creation_arguments.tessellation_control_shader =
+          tessellation_control_shader;
+      creation_arguments.render_pass = render_pass;
+      creation_arguments.render_pass_key = pipeline_description.render_pass_key;
+      if (creation_queue_.has_threads()) {
+        // Nothing is drawing these yet, so they publish as they are built.
+        creation_queue_.PushUnordered(creation_arguments);
       } else {
         // No creation threads - create synchronously.
-        PipelineCreationArguments creation_arguments;
-        creation_arguments.pipeline = &pipeline_pair;
-        creation_arguments.vertex_shader = vertex_translation;
-        creation_arguments.pixel_shader = pixel_translation;
-        creation_arguments.geometry_shader = geometry_shader;
-        creation_arguments.tessellation_vertex_shader =
-            tessellation_vertex_shader;
-        creation_arguments.tessellation_control_shader =
-            tessellation_control_shader;
-        creation_arguments.render_pass = render_pass;
-        creation_arguments.render_pass_key =
-            pipeline_description.render_pass_key;
         EnsurePipelineCreated(creation_arguments);
       }
 
       ++pipelines_created;
     }
 
-    if (!creation_threads_.empty()) {
+    if (creation_queue_.has_threads()) {
       if (blocking) {
         // Blocking mode: wait for all pipelines to be created.
-        bool await_creation_completion_event;
-        {
-          std::lock_guard<std::mutex> lock(creation_request_lock_);
-          await_creation_completion_event =
-              !creation_queue_.empty() || creation_threads_busy_ != 0;
-          if (await_creation_completion_event) {
-            creation_completion_event_->Reset();
-            creation_completion_set_event_.store(true,
-                                                 std::memory_order_release);
-          }
-        }
-        if (await_creation_completion_event) {
-          creation_request_cond_.notify_one();
-          xe::threading::Wait(creation_completion_event_.get(), false);
-        }
+        creation_queue_.AwaitCompletion();
       } else {
-        // Non-blocking mode: store callback for later invocation.
-        std::lock_guard<std::mutex> lock(creation_request_lock_);
-        if (creation_queue_.empty() && creation_threads_busy_ == 0) {
-          // No work pending - callback will be invoked at end of function.
-        } else {
-          creation_completion_callback_ = std::move(completion_callback);
-          completion_callback = nullptr;  // Prevent invocation at end
-        }
+        // Non-blocking mode: the creation threads invoke the callback when they
+        // are done - or leave it to the tail of this function if they already
+        // are.
+        creation_queue_.TakeCompletionCallback(completion_callback);
       }
     }
 

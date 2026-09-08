@@ -11,17 +11,14 @@
 #define XENIA_GPU_VULKAN_VULKAN_PIPELINE_STATE_CACHE_H_
 
 #include <atomic>
-#include <condition_variable>
 #include <cstddef>
 #include <cstdio>
 #include <cstring>
 #include <deque>
 #include <filesystem>
 #include <functional>
-#include <map>
 #include <memory>
 #include <mutex>
-#include <queue>
 #include <set>
 #include <unordered_map>
 #include <utility>
@@ -32,6 +29,7 @@
 #include "xenia/base/threading.h"
 #include "xenia/base/xxhash.h"
 #include "xenia/gpu/guest_spirv_shader_cache.h"
+#include "xenia/gpu/pipeline_creation_queue.h"
 #include "xenia/gpu/primitive_processor.h"
 #include "xenia/gpu/register_file.h"
 #include "xenia/gpu/registers.h"
@@ -342,11 +340,6 @@ class VulkanPipelineCache : public GuestSpirvShaderCache::Host {
     VkRenderPass render_pass;
     // For dynamic rendering (VK_KHR_dynamic_rendering / Vulkan 1.3).
     VulkanRenderTargetCache::RenderPassKey render_pass_key;
-    // Publish order among live pipelines, 1-based. A finished pipeline is only
-    // swapped in once every earlier one has been, so a pass never samples a
-    // producer still drawing with its placeholder. 0 for warm-up entries, which
-    // publish as soon as they are built.
-    uint32_t publish_seq = 0;
   };
 
   // Can be called from multiple threads. use_try_claim atomically claims the
@@ -422,11 +415,7 @@ class VulkanPipelineCache : public GuestSpirvShaderCache::Host {
       VkShaderModule vertex_shader_override = VK_NULL_HANDLE,
       VkPipeline* out_unpublished_pipeline = nullptr);
 
-  // Swaps a freshly created pipeline (or a creation failure, null) into its
-  // entry, holding live pipelines back until their turn.
-  void PublishCreatedPipeline(
-      const PipelineCreationArguments& creation_arguments, VkPipeline pipeline);
-  // The unordered store PublishCreatedPipeline defers to.
+  // Swaps a created pipeline (or a failure, a null handle) into its entry.
   void StoreCreatedPipeline(const PipelineCreationArguments& creation_arguments,
                             VkPipeline pipeline, bool creating_placeholder);
 
@@ -538,32 +527,16 @@ class VulkanPipelineCache : public GuestSpirvShaderCache::Host {
   // Previously used pipeline, to avoid lookups if the state wasn't changed.
   std::pair<const PipelineDescription, Pipeline>* last_pipeline_ = nullptr;
 
-  void CreationThread();
+  // Builds one queued pipeline on a creation thread. VK_NULL_HANDLE if it
+  // failed.
+  VkPipeline CreateQueuedPipeline(
+      const PipelineCreationArguments& creation_arguments,
+      SpirvShaderTranslator* worker_translator);
 
   // For asynchronous creation.
-  std::vector<std::unique_ptr<xe::threading::Thread>> creation_threads_;
-  std::atomic<bool> creation_threads_shutdown_{false};
-  std::atomic<size_t> creation_threads_busy_{0};
-  // Contains pointers to map entries. Pipelines are never evicted as games have
-  // a finite set that should all remain cached for performance. FIFO, so they
-  // build in the order the game first drew them.
-  std::queue<PipelineCreationArguments> creation_queue_;
-  std::mutex creation_request_lock_;
-  std::condition_variable creation_request_cond_;
-  // Next publish_seq to hand out. Protected with creation_request_lock_, so it
-  // is assigned in the same order the pipelines are queued.
-  uint32_t publish_seq_next_ = 1;
-  // Reorder buffer for live pipelines: publish_cursor_ is the seq whose turn it
-  // is, publish_parked_ holds ones that finished early. A parked entry always
-  // has an earlier one queued or in flight, so the completion event's "queue
-  // empty and nobody busy" test still means everything is published.
-  std::mutex publish_lock_;
-  uint32_t publish_cursor_ = 1;
-  std::map<uint32_t, std::pair<PipelineCreationArguments, VkPipeline>>
-      publish_parked_;
-  std::unique_ptr<xe::threading::Event> creation_completion_event_ = nullptr;
-  std::atomic<bool> creation_completion_set_event_{false};
-  std::function<void()> creation_completion_callback_;
+  PipelineCreationQueue<PipelineCreationArguments, VkPipeline,
+                        SpirvShaderTranslator>
+      creation_queue_;
   // During startup loading, don't block on pipeline creation to allow game
   // boot.
   bool startup_loading_ = false;

@@ -11,14 +11,11 @@
 #define XENIA_GPU_D3D12_PIPELINE_CACHE_H_
 
 #include <atomic>
-#include <condition_variable>
 #include <cstdio>
 #include <deque>
 #include <functional>
-#include <map>
 #include <memory>
 #include <mutex>
-#include <queue>
 #include <set>
 #include <string>
 #include <thread>
@@ -34,6 +31,7 @@
 #include "xenia/gpu/d3d12/d3d12_render_target_cache.h"
 #include "xenia/gpu/gpu_flags.h"
 #include "xenia/gpu/guest_spirv_shader_cache.h"
+#include "xenia/gpu/pipeline_creation_queue.h"
 #include "xenia/gpu/primitive_processor.h"
 #include "xenia/gpu/register_file.h"
 #include "xenia/gpu/registers.h"
@@ -540,12 +538,6 @@ class PipelineCache : public GuestSpirvShaderCache::Host {
     // and the entry would otherwise skip its draws for the rest of the session.
     std::atomic<bool> creation_failed{false};
 
-    // Publish order among live pipelines, 1-based. A finished pipeline is only
-    // swapped in once every earlier one has been, so a pass never samples a
-    // producer still drawing with its placeholder. 0 for warm-up entries, which
-    // publish as soon as they are built.
-    uint32_t publish_seq{0};
-
     // Whether the next draw should rebuild this entry from live state.
     bool wants_rebuild() const {
       return from_storage && creation_failed.load(std::memory_order_acquire);
@@ -581,50 +573,14 @@ class PipelineCache : public GuestSpirvShaderCache::Host {
   // index).
   ShaderStorageWriter<PipelineStoredDescription> storage_writer_;
 
-  // Pipeline creation threads.
-  void CreationThread(size_t thread_index);
-  void CreateQueuedPipelinesOnProcessorThread();
-  // Swaps a freshly created pipeline (or a creation failure, |state| null) into
-  // its entry, holding live pipelines back until their turn.
-  void PublishCreatedPipeline(Pipeline* pipeline, ID3D12PipelineState* state);
-  // The unordered store PublishCreatedPipeline defers to.
+  // Builds one queued pipeline, on a creation thread or on the processor thread
+  // draining the warm-up queue. Null if it failed.
+  ID3D12PipelineState* CreateQueuedPipeline(
+      Pipeline* pipeline, SpirvShaderTranslator* mesa_spirv_translator);
+  // Swaps a created pipeline (or a failure, |state| null) into its entry.
   void StoreCreatedPipeline(Pipeline* pipeline, ID3D12PipelineState* state);
-  xe_mutex creation_request_lock_;
-  std::condition_variable_any creation_request_cond_;
-  // Contains pointers to map entries. Pipelines are never evicted as games have
-  // a finite set that should all remain cached for performance. FIFO, so they
-  // build in the order the game first drew them.
-  std::queue<Pipeline*> creation_queue_;
-  // Next publish_seq to hand out. Protected with creation_request_lock_, so it
-  // is assigned in the same order the pipelines are queued.
-  uint32_t publish_seq_next_ = 1;
-  // Reorder buffer for live pipelines: publish_cursor_ is the seq whose turn it
-  // is, publish_parked_ holds ones that finished early. A parked entry always
-  // has an earlier one queued or in flight, so the completion event's "queue
-  // empty and nobody busy" test still means everything is published.
-  std::mutex publish_lock_;
-  uint32_t publish_cursor_ = 1;
-  std::map<uint32_t, std::pair<Pipeline*, ID3D12PipelineState*>>
-      publish_parked_;
-  // Number of threads that are currently creating a pipeline - incremented when
-  // a pipeline is dequeued (the completion event can't be triggered before this
-  // is zero). Protected with creation_request_lock_.
-  size_t creation_threads_busy_ = 0;
-  // Manual-reset event set when the last queued pipeline is created and there
-  // are no more pipelines to create. This is triggered by the thread creating
-  // the last pipeline.
-  std::unique_ptr<xe::threading::Event> creation_completion_event_;
-  // Whether setting the event on completion is queued. Protected with
-  // creation_request_lock_, notify_one creation_request_cond_ when set.
-  bool creation_completion_set_event_ = false;
-  // Callback to invoke when all queued pipelines are created (for non-blocking
-  // initialization). Protected with creation_request_lock_.
-  std::function<void()> creation_completion_callback_;
-  // Creation threads with this index or above need to be shut down as soon as
-  // possible. Protected with creation_request_lock_, notify_all
-  // creation_request_cond_ when set.
-  size_t creation_threads_shutdown_from_ = SIZE_MAX;
-  std::vector<std::unique_ptr<xe::threading::Thread>> creation_threads_;
+  PipelineCreationQueue<Pipeline*, ID3D12PipelineState*, SpirvShaderTranslator>
+      creation_queue_;
 
   // Placeholder pipelines replaced by their real counterpart on a creation
   // thread, paired with the submission they may still be referenced by. Real

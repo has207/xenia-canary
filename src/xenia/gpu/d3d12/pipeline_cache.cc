@@ -157,15 +157,17 @@ bool PipelineCache::Initialize() {
     // Pick some reasonable amount if couldn't determine the number of cores.
     logical_processor_count = 6;
   }
-  // Initialize creation thread synchronization data even if not using creation
-  // threads because they may be used anyway to create pipelines from the
-  // storage.
-  creation_threads_busy_ = 0;
-  creation_completion_event_ =
-      xe::threading::Event::CreateManualResetEvent(true);
-  assert_not_null(creation_completion_event_);
-  creation_completion_set_event_ = false;
-  creation_threads_shutdown_from_ = SIZE_MAX;
+  // Set up even without creation threads - the storage warm-up starts some of
+  // its own.
+  creation_queue_.Initialize(
+      "D3D12 Pipelines",
+      [this](Pipeline* pipeline, SpirvShaderTranslator* translator) {
+        return CreateQueuedPipeline(pipeline, translator);
+      },
+      [this](Pipeline* pipeline, ID3D12PipelineState* state) {
+        StoreCreatedPipeline(pipeline, state);
+      },
+      [this]() { return guest_shader_cache_.CreateWorkerTranslator(); });
   if (cvars::d3d12_pipeline_creation_threads != 0) {
     size_t creation_thread_count;
     if (cvars::d3d12_pipeline_creation_threads < 0) {
@@ -176,32 +178,20 @@ bool PipelineCache::Initialize() {
           std::min(uint32_t(cvars::d3d12_pipeline_creation_threads),
                    logical_processor_count);
     }
-    for (size_t i = 0; i < creation_thread_count; ++i) {
-      std::unique_ptr<xe::threading::Thread> creation_thread =
-          xe::threading::Thread::Create({}, [this, i]() { CreationThread(i); });
-      assert_not_null(creation_thread);
-      creation_thread->set_name("D3D12 Pipelines");
-      creation_threads_.push_back(std::move(creation_thread));
-    }
+    creation_queue_.SetThreadCount(creation_thread_count);
   }
   return true;
 }
 
 void PipelineCache::Shutdown() {
   // Shut down all threads, before destroying the pipelines since they may be
-  // creating them.
-  if (!creation_threads_.empty()) {
-    {
-      std::lock_guard<xe_mutex> lock(creation_request_lock_);
-      creation_threads_shutdown_from_ = 0;
+  // creating them. Nothing can be parked for publishing once they are joined,
+  // so release whatever was still held back.
+  for (auto& parked : creation_queue_.Shutdown()) {
+    if (parked.second) {
+      parked.second->Release();
     }
-    creation_request_cond_.notify_all();
-    for (size_t i = 0; i < creation_threads_.size(); ++i) {
-      xe::threading::Wait(creation_threads_[i].get(), false);
-    }
-    creation_threads_.clear();
   }
-  creation_completion_event_.reset();
 
   // Shut down the persistent shader / pipeline storage.
   ShutdownShaderStorage();
@@ -213,22 +203,6 @@ void PipelineCache::Shutdown() {
     deferred.first->Release();
   }
   deferred_destroy_pipelines_.clear();
-
-  // The creation threads are joined without draining the queue, so drop what is
-  // left before the entries it points at are deleted below.
-  while (!creation_queue_.empty()) {
-    creation_queue_.pop();
-  }
-  // Nothing can be parked for publishing any more either - release whatever was
-  // still held back.
-  for (auto& parked : publish_parked_) {
-    if (parked.second.second) {
-      parked.second.second->Release();
-    }
-  }
-  publish_parked_.clear();
-  publish_cursor_ = 1;
-  publish_seq_next_ = 1;
 
   // Destroy all pipelines.
   current_pipeline_ = nullptr;
@@ -304,21 +278,11 @@ void PipelineCache::InitializeShaderStorage(
     if (!logical_processor_count) {
       logical_processor_count = 6;
     }
-    size_t creation_thread_original_count = creation_threads_.size();
-    size_t creation_thread_needed_count = std::max(
+    size_t creation_thread_original_count = creation_queue_.thread_count();
+    creation_queue_.SetThreadCount(std::max(
         std::min(pipeline_stored_descriptions.size(), logical_processor_count) -
             size_t(1),
-        creation_thread_original_count);
-    while (creation_threads_.size() < creation_thread_needed_count) {
-      size_t creation_thread_index = creation_threads_.size();
-      std::unique_ptr<xe::threading::Thread> creation_thread =
-          xe::threading::Thread::Create({}, [this, creation_thread_index]() {
-            CreationThread(creation_thread_index);
-          });
-      assert_not_null(creation_thread);
-      creation_thread->set_name("D3D12 Pipelines");
-      creation_threads_.push_back(std::move(creation_thread));
-    }
+        creation_thread_original_count));
 
     size_t pipelines_created = 0;
     size_t pipelines_already_exist = 0;
@@ -414,14 +378,11 @@ void PipelineCache::InitializeShaderStorage(
         pipelines_.emplace(pipeline_stored_description.description_hash,
                            new_pipeline);
         COUNT_profile_set("gpu/pipeline_cache/pipelines", pipelines_.size());
-        if (!creation_threads_.empty()) {
+        if (creation_queue_.has_threads()) {
           // Creation thread builds the Mesa DXIL off the main thread (the
           // deferred block in EnsurePipelineShadersTranslated), then the PSO.
-          {
-            std::lock_guard<xe_mutex> lock(creation_request_lock_);
-            creation_queue_.push(new_pipeline);
-          }
-          creation_request_cond_.notify_one();
+          // Nothing is drawing these yet, so they publish as they are built.
+          creation_queue_.PushUnordered(new_pipeline);
         } else {
           // No creation threads: build the DXIL + create the PSO here.
           if (BuildMesaPipelineDxil(
@@ -439,57 +400,21 @@ void PipelineCache::InitializeShaderStorage(
       }
     }
 
-    if (!creation_threads_.empty()) {
+    if (creation_queue_.has_threads()) {
       if (blocking) {
-        // Blocking mode: help drain the queue on this thread, then wait for
-        // background threads to finish.
-        CreateQueuedPipelinesOnProcessorThread();
-        if (creation_threads_.size() > creation_thread_original_count) {
-          {
-            std::lock_guard<xe_mutex> lock(creation_request_lock_);
-            creation_threads_shutdown_from_ = creation_thread_original_count;
-            // Assuming the queue is empty because of
-            // CreateQueuedPipelinesOnProcessorThread.
-          }
-          creation_request_cond_.notify_all();
-          while (creation_threads_.size() > creation_thread_original_count) {
-            xe::threading::Wait(creation_threads_.back().get(), false);
-            creation_threads_.pop_back();
-          }
-          {
-            // Cleanup so additional threads can be created later again.
-            std::lock_guard<xe_mutex> lock(creation_request_lock_);
-            creation_threads_shutdown_from_ = SIZE_MAX;
-          }
-        }
-        // Wait for any background threads (including original ones) to finish
-        // creating pipelines they may have popped from the queue. This ensures
-        // all cached pipelines are fully created before the game starts,
-        // populating the driver's shader cache.
-        bool await_creation_completion_event;
-        {
-          std::lock_guard<xe_mutex> lock(creation_request_lock_);
-          await_creation_completion_event = creation_threads_busy_ != 0;
-          if (await_creation_completion_event) {
-            creation_completion_event_->Reset();
-            creation_completion_set_event_ = true;
-          }
-        }
-        if (await_creation_completion_event) {
-          creation_request_cond_.notify_one();
-          xe::threading::Wait(creation_completion_event_.get(), false);
-        }
+        // Blocking mode: help drain the queue on this thread, using the main
+        // translator, then let the extra threads go and wait for the ones that
+        // are still finishing a pipeline they popped. This ensures all cached
+        // pipelines are fully created before the game starts, populating the
+        // driver's shader cache.
+        creation_queue_.DrainOnCallingThread(&guest_shader_cache_.translator());
+        creation_queue_.SetThreadCount(creation_thread_original_count);
+        creation_queue_.AwaitCompletion();
       } else {
-        // Non-blocking mode: let background threads handle all pipeline
-        // creation. Store completion callback to be invoked when done.
-        std::lock_guard<xe_mutex> lock(creation_request_lock_);
-        if (creation_queue_.empty() && creation_threads_busy_ == 0) {
-          // No work pending - callback will be invoked at end of function.
-        } else {
-          creation_completion_callback_ = std::move(completion_callback);
-          completion_callback =
-              nullptr;  // Prevent invocation at end of function
-        }
+        // Non-blocking mode: the background threads have it, and invoke the
+        // callback when they are done - or leave it to the tail of this
+        // function if they are already done.
+        creation_queue_.TakeCompletionCallback(completion_callback);
       }
     }
 
@@ -516,7 +441,7 @@ void PipelineCache::InitializeShaderStorage(
 
   // Invoke completion callback if provided (for blocking mode or when no
   // background work was needed). For non-blocking mode with background work,
-  // the callback is stored and invoked by CreationThread when done.
+  // the creation queue took it and invokes it when done.
   if (completion_callback) {
     completion_callback();
   }
@@ -540,13 +465,11 @@ void PipelineCache::EndSubmission() {
   }
   // Release placeholder pipelines the GPU is now done with.
   ProcessDeferredDestructions();
-  if (!creation_threads_.empty()) {
-    // Don't wait for pipeline creation - let background threads work
-    // asynchronously. Bindless draws use a placeholder pipeline meanwhile.
-    // Bindful draws are skipped until the pipeline is ready. This avoids
-    // frame-time spikes from blocking on pipeline creation.
-    creation_request_cond_.notify_one();
-  }
+  // Don't wait for pipeline creation - let background threads work
+  // asynchronously. Bindless draws use a placeholder pipeline meanwhile.
+  // Bindful draws are skipped until the pipeline is ready. This avoids
+  // frame-time spikes from blocking on pipeline creation.
+  creation_queue_.Notify();
 }
 
 void PipelineCache::ProcessDeferredDestructions() {
@@ -569,34 +492,10 @@ void PipelineCache::ProcessDeferredDestructions() {
   }
 }
 
-bool PipelineCache::IsCreatingPipelines() {
-  if (creation_threads_.empty()) {
-    return false;
-  }
-  std::lock_guard<xe_mutex> lock(creation_request_lock_);
-  return !creation_queue_.empty() || creation_threads_busy_ != 0;
-}
+bool PipelineCache::IsCreatingPipelines() { return creation_queue_.IsBusy(); }
 
 void PipelineCache::AwaitPipelineCompletion() {
-  if (creation_threads_.empty()) {
-    return;
-  }
-
-  bool await_creation_completion_event;
-  {
-    std::lock_guard<xe_mutex> lock(creation_request_lock_);
-    await_creation_completion_event =
-        !creation_queue_.empty() || creation_threads_busy_ != 0;
-    if (await_creation_completion_event) {
-      creation_completion_event_->Reset();
-      creation_completion_set_event_ = true;
-    }
-  }
-
-  if (await_creation_completion_event) {
-    creation_request_cond_.notify_one();
-    xe::threading::Wait(creation_completion_event_.get(), false);
-  }
+  creation_queue_.AwaitCompletion();
 }
 
 ID3D12PipelineState* PipelineCache::AwaitD3D12PipelineByHandle(void* handle) {
@@ -1199,7 +1098,7 @@ bool PipelineCache::ConfigurePipeline(
   // Only use async when there's a pixel shader - VS-only pipelines are fast
   // to compile and don't benefit from async (vertex shaders are small).
   bool use_async = cvars::async_shader_compilation &&
-                   !creation_threads_.empty() && pixel_shader != nullptr;
+                   creation_queue_.has_threads() && pixel_shader != nullptr;
   // An immediate hot-swap placeholder pipeline needs the real vertex shader and
   // a root signature that does not depend on the (not-yet-translated) pixel
   // shader. Only bindless mode has such a fixed root signature, so the
@@ -1498,13 +1397,7 @@ bool PipelineCache::ConfigurePipeline(
             pixel_shader ? pixel_shader->shader().ucode_data_hash() : 0);
       }
     }
-    {
-      std::lock_guard<xe_mutex> lock(creation_request_lock_);
-      // Queued and numbered together, so the publish order matches draw order.
-      new_pipeline->publish_seq = publish_seq_next_++;
-      creation_queue_.push(new_pipeline);
-    }
-    creation_request_cond_.notify_one();
+    creation_queue_.Push(new_pipeline);
   } else {
     // Sync mode or no creation threads: create synchronously.
     new_pipeline->state.store(CreateD3D12Pipeline(runtime_description),
@@ -2512,125 +2405,12 @@ ID3D12PipelineState* PipelineCache::CreateD3D12Pipeline(
   return state;
 }
 
-void PipelineCache::CreationThread(size_t thread_index) {
-  // Thread-local guest Mesa SPIR-V translator (the translator is not thread
-  // safe), so the deferred ucode->SPIR-V build runs here, off the main thread,
-  // one per creation thread.
-  std::unique_ptr<SpirvShaderTranslator> mesa_spirv_translator =
-      guest_shader_cache_.CreateWorkerTranslator();
-
-  while (true) {
-    Pipeline* pipeline_to_create = nullptr;
-
-    // Check if need to shut down or set the completion event and dequeue the
-    // pipeline if there is any.
-    {
-      std::unique_lock<xe_mutex> lock(creation_request_lock_);
-      if (thread_index >= creation_threads_shutdown_from_ ||
-          creation_queue_.empty()) {
-        if (creation_threads_busy_ == 0) {
-          // Last pipeline in the queue created.
-          if (creation_completion_set_event_) {
-            // Signal the event if requested (blocking mode).
-            creation_completion_set_event_ = false;
-            creation_completion_event_->Set();
-          }
-          if (creation_completion_callback_) {
-            // Invoke completion callback (non-blocking mode).
-            auto callback = std::move(creation_completion_callback_);
-            creation_completion_callback_ = nullptr;
-            lock.unlock();
-            callback();
-            lock.lock();
-          }
-        }
-        if (thread_index >= creation_threads_shutdown_from_) {
-          return;
-        }
-        creation_request_cond_.wait(lock);
-        continue;
-      }
-      // Take the pipeline from the queue and increment the busy thread count
-      // until the pipeline is created - other threads must be able to dequeue
-      // requests, but can't set the completion event until the pipelines are
-      // fully created (rather than just started creating).
-      pipeline_to_create = creation_queue_.front();
-      creation_queue_.pop();
-      ++creation_threads_busy_;
-    }
-
-    // Build the deferred DXIL off the main thread.
-    EnsurePipelineShadersTranslated(pipeline_to_create,
-                                    mesa_spirv_translator.get(),
-                                    /*use_try_claim=*/true);
-
-    // Create the D3D12 pipeline state object.
-    ID3D12PipelineState* new_state =
-        CreateD3D12Pipeline(pipeline_to_create->description);
-
-    PublishCreatedPipeline(pipeline_to_create, new_state);
-
-    // Pipeline created - the thread is not busy anymore, safe to set the
-    // completion event if needed (at the next iteration, or in some other
-    // thread).
-    {
-      std::lock_guard<xe_mutex> lock(creation_request_lock_);
-      --creation_threads_busy_;
-    }
-  }
-}
-
-void PipelineCache::CreateQueuedPipelinesOnProcessorThread() {
-  assert_false(creation_threads_.empty());
-  while (true) {
-    Pipeline* pipeline_to_create;
-    {
-      std::lock_guard<xe_mutex> lock(creation_request_lock_);
-      if (creation_queue_.empty()) {
-        break;
-      }
-      pipeline_to_create = creation_queue_.front();
-      creation_queue_.pop();
-    }
-
-    // Build the deferred DXIL on the processor thread (uses the main
-    // translator).
-    EnsurePipelineShadersTranslated(pipeline_to_create,
-                                    &guest_shader_cache_.translator(),
-                                    /*use_try_claim=*/true);
-
-    ID3D12PipelineState* new_state =
-        CreateD3D12Pipeline(pipeline_to_create->description);
-
-    PublishCreatedPipeline(pipeline_to_create, new_state);
-  }
-}
-
-void PipelineCache::PublishCreatedPipeline(Pipeline* pipeline,
-                                           ID3D12PipelineState* state) {
-  if (!pipeline->publish_seq) {
-    // Storage warm-up: nothing is drawing these yet, so ordering them would
-    // only delay them.
-    StoreCreatedPipeline(pipeline, state);
-    return;
-  }
-  // Park it and take over whatever run of publishes this completes. The stores
-  // run outside the lock - one of them may take deferred_destroy_mutex_.
-  std::vector<std::pair<Pipeline*, ID3D12PipelineState*>> to_publish;
-  {
-    std::lock_guard<std::mutex> lock(publish_lock_);
-    publish_parked_.emplace(pipeline->publish_seq,
-                            std::make_pair(pipeline, state));
-    auto it = publish_parked_.begin();
-    while (it != publish_parked_.end() && it->first == publish_cursor_) {
-      to_publish.push_back(std::move(it->second));
-      it = publish_parked_.erase(it);
-      ++publish_cursor_;
-    }
-  }
-  for (auto& publish : to_publish) {
-    StoreCreatedPipeline(publish.first, publish.second);
-  }
+ID3D12PipelineState* PipelineCache::CreateQueuedPipeline(
+    Pipeline* pipeline, SpirvShaderTranslator* mesa_spirv_translator) {
+  // Build the deferred DXIL off the main thread.
+  EnsurePipelineShadersTranslated(pipeline, mesa_spirv_translator,
+                                  /*use_try_claim=*/true);
+  return CreateD3D12Pipeline(pipeline->description);
 }
 
 void PipelineCache::StoreCreatedPipeline(Pipeline* pipeline,
