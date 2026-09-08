@@ -49,6 +49,7 @@ class ImGuiPerformanceDialog : public ImGuiGamepadDialog {
   // Setting change handlers
   void OnReadbackResolveChanged(int value);
   void OnReadbackResolveSyncChanged(bool enabled);
+  void OnMemexportEnableChanged(bool enabled);
   void OnMemexportAwaitFencesChanged(bool enabled);
   void OnOcclusionQueryChanged(int value);
   void OnEmulatedDisplayUncappedChanged(bool uncapped);
@@ -60,6 +61,7 @@ class ImGuiPerformanceDialog : public ImGuiGamepadDialog {
   // Current settings state (selected values)
   int readback_resolve_mode_ = 1;  // 0=None, 1=Fast, 2=All
   bool readback_resolve_sync_ = true;
+  bool memexport_enable_ = true;
   bool memexport_await_fences_ = true;
   int occlusion_query_mode_ = 0;  // 0=Fake, 1=Fast, 2=Fast-Alt, 3=Strict
   bool display_uncapped_ = false;

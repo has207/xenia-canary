@@ -14,6 +14,12 @@
 // SharedMemory, Shader, RegisterFile, xenos, xe::bit_scan_forward and <array>.
 // No include guard: this is injected into a class body, not a standalone
 // header.
+//
+// It must also define, before including this:
+//   void FlushMemexportStagingReadback()
+//     Copies export output the backend staged for readback into guest RAM, now
+//     that the wait has made it available. Empty where output already lands
+//     there, which is zero-copy and the host buffer.
 
 // Records the guest pages any memexport draw wrote so geometry draws consuming
 // that output route to the host-imported buffer. Marking rounds outward.
@@ -48,6 +54,7 @@ void AwaitMemexportForFence() {
   // Flushes the open submission before waiting, so a draw that is still only
   // recorded gets submitted rather than skipped.
   AwaitAllQueueOperationsCompletion();
+  FlushMemexportStagingReadback();
 }
 
 // Same, for the guest asking the GPU to flush a range it is about to read
@@ -59,6 +66,7 @@ void AwaitMemexportForCoherency(uint32_t base_bytes, uint32_t size_bytes) {
   }
   memexport_await_pending_ = false;
   AwaitAllQueueOperationsCompletion();
+  FlushMemexportStagingReadback();
 }
 
 // Clears memexport marks for a range a resolve just wrote, so its device-buffer

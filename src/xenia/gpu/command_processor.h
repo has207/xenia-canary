@@ -39,6 +39,7 @@ namespace gpu {
 
 enum class GPUSetting {
   ClearMemoryPageState,
+  MemexportEnable,
   MemexportAwaitFences,
 };
 
@@ -257,6 +258,9 @@ class CommandProcessor {
   };
 
   static constexpr uint32_t kReadbackBufferSizeIncrement = 16 * 1024 * 1024;
+
+  // A staging buffer unused for this many frames is released.
+  static constexpr uint64_t kReadbackBufferEvictionAgeFrames = 60;
 
   // Progressive alignment for readback buffers to avoid wasting memory
   static inline uint32_t AlignReadbackBufferSize(uint32_t size) {

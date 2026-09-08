@@ -98,11 +98,11 @@ DEFINE_string(
 
 DEFINE_bool(
     memexport_enable, true,
-    "Make memory export output visible to the CPU by routing the draws that "
-    "write it to a buffer aliasing guest RAM. Needed by games that read "
+    "Make memory export output visible to the CPU. Needed by games that read "
     "exported data on the CPU. Disabling it keeps the output in device-local "
-    "memory, which is faster for the draws that consume it on the GPU. Applies "
-    "at title launch.",
+    "memory, which is faster for the draws that consume it on the GPU. The "
+    "output reaches guest RAM in place where the host buffer is available "
+    "(see enable_host_buffer), and through a staging copy otherwise.",
     "GPU");
 
 DEFINE_bool(
@@ -135,6 +135,9 @@ void SaveGPUSetting(GPUSetting setting, uint64_t value) {
     case GPUSetting::ClearMemoryPageState:
       OVERRIDE_bool(clear_memory_page_state, static_cast<bool>(value));
       break;
+    case GPUSetting::MemexportEnable:
+      OVERRIDE_bool(memexport_enable, static_cast<bool>(value));
+      break;
     case GPUSetting::MemexportAwaitFences:
       OVERRIDE_bool(memexport_await_fences, static_cast<bool>(value));
       break;
@@ -145,6 +148,8 @@ bool GetGPUSetting(GPUSetting setting) {
   switch (setting) {
     case GPUSetting::ClearMemoryPageState:
       return cvars::clear_memory_page_state;
+    case GPUSetting::MemexportEnable:
+      return cvars::memexport_enable;
     case GPUSetting::MemexportAwaitFences:
       return cvars::memexport_await_fences;
     default:

@@ -38,6 +38,7 @@
 
 DECLARE_bool(clear_memory_page_state);
 DECLARE_bool(gpu_debug_markers);
+DECLARE_bool(memexport_enable);
 DECLARE_bool(submit_on_primary_buffer_end);
 
 DEFINE_bool(
@@ -164,6 +165,14 @@ void VulkanCommandProcessor::ClearCaches() {
 
 void VulkanCommandProcessor::InvalidateGpuMemory() {
   shared_memory_->InvalidateAllPages();
+}
+
+void VulkanCommandProcessor::ClearReadbackBuffers() {
+  if (AwaitAllQueueOperationsCompletion()) {
+    ClearReadbackStagingBuffers();
+    // Their staging buffers are gone, so there is nothing left to copy out.
+    memexport_staged_.clear();
+  }
 }
 
 void VulkanCommandProcessor::TracePlaybackWroteMemory(uint32_t base_ptr,
@@ -1465,6 +1474,7 @@ void VulkanCommandProcessor::ShutdownContext() {
 
   // Resolve downscale cleanup.
   ClearResolveHoldSnapshots();
+  ClearReadbackStagingBuffers();
   ui::vulkan::util::DestroyAndNullHandle(dfn.vkDestroyBuffer, device,
                                          resolve_downscale_buffer_);
   ui::vulkan::util::DestroyAndNullHandle(dfn.vkFreeMemory, device,
@@ -1511,6 +1521,7 @@ void VulkanCommandProcessor::ShutdownContext() {
   // null (routing disabled) until the pool is recreated.
   shared_memory_host_and_edram_descriptor_set_ = VK_NULL_HANDLE;
   ResetMemexportPages();
+  memexport_staged_.clear();
   zpd_fsi_counter_descriptor_buffer_ = VK_NULL_HANDLE;
   zpd_fsi_counter_descriptor_range_ = 0;
   ui::vulkan::util::DestroyAndNullHandle(dfn.vkDestroyBuffer, device,
@@ -1767,6 +1778,123 @@ void VulkanCommandProcessor::PrepareResolveHoldSnapshotEviction() {
   AwaitAllQueueOperationsCompletion();
 }
 
+bool VulkanCommandProcessor::CreateReadbackStagingBuffer(
+    ReadbackStagingBuffer& buffer, uint32_t size) {
+  const ui::vulkan::VulkanDevice* const vulkan_device = GetVulkanDevice();
+  const ui::vulkan::VulkanDevice::Functions& dfn = vulkan_device->functions();
+  const VkDevice device = vulkan_device->device();
+
+  if (!ui::vulkan::util::CreateDedicatedAllocationBuffer(
+          vulkan_device, size, VK_BUFFER_USAGE_TRANSFER_DST_BIT,
+          ui::vulkan::util::MemoryPurpose::kReadback, buffer.buffer,
+          buffer.memory, &buffer.memory_type, &buffer.memory_size)) {
+    XELOGE("Failed to create a {} KB readback staging buffer", size >> 10);
+    return false;
+  }
+  if (dfn.vkMapMemory(device, buffer.memory, 0, VK_WHOLE_SIZE, 0,
+                      &buffer.mapped) != VK_SUCCESS) {
+    buffer.mapped = nullptr;
+    ui::vulkan::util::DestroyAndNullHandle(dfn.vkFreeMemory, device,
+                                           buffer.memory);
+    ui::vulkan::util::DestroyAndNullHandle(dfn.vkDestroyBuffer, device,
+                                           buffer.buffer);
+    return false;
+  }
+  return true;
+}
+
+void VulkanCommandProcessor::DestroyReadbackStagingBuffer(
+    ReadbackStagingBuffer& buffer) {
+  const ui::vulkan::VulkanDevice* const vulkan_device = GetVulkanDevice();
+  const ui::vulkan::VulkanDevice::Functions& dfn = vulkan_device->functions();
+  const VkDevice device = vulkan_device->device();
+  if (buffer.mapped != nullptr) {
+    dfn.vkUnmapMemory(device, buffer.memory);
+    buffer.mapped = nullptr;
+  }
+  ui::vulkan::util::DestroyAndNullHandle(dfn.vkDestroyBuffer, device,
+                                         buffer.buffer);
+  ui::vulkan::util::DestroyAndNullHandle(dfn.vkFreeMemory, device,
+                                         buffer.memory);
+}
+
+// The copy into a staging buffer is recorded, so it has to drain first.
+void VulkanCommandProcessor::PrepareReadbackStagingEviction() {
+  AwaitAllQueueOperationsCompletion();
+}
+
+// Records a copy into this range's staging buffer, for the caller to copy out
+// with FinishReadbackStagingToGuestRam.
+VulkanCommandProcessor::ReadbackStagingSlot*
+VulkanCommandProcessor::StageReadbackFromBuffer(VkBuffer source_buffer,
+                                                VkDeviceSize source_offset,
+                                                uint32_t address,
+                                                uint32_t length) {
+  ReadbackStagingSlot* slot = AcquireReadbackStagingSlot(
+      MakeReadbackResolveKey(address, length), length);
+  if (slot == nullptr) {
+    return nullptr;
+  }
+  VkBuffer staging_buffer = ReadbackStagingWriteBuffer(*slot).buffer;
+  PushBufferMemoryBarrier(
+      source_buffer, source_offset, VkDeviceSize(length),
+      VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT | guest_shader_pipeline_stages_ |
+          VK_PIPELINE_STAGE_TRANSFER_BIT,
+      VK_PIPELINE_STAGE_TRANSFER_BIT,
+      VK_ACCESS_SHADER_WRITE_BIT | VK_ACCESS_TRANSFER_WRITE_BIT,
+      VK_ACCESS_TRANSFER_READ_BIT);
+  OrderReadbackStagingWrite(staging_buffer);
+  SubmitBarriers(true);
+  InsertDebugMarker("Readback (staging): 0x%08X, %u bytes", address, length);
+  VkBufferCopy copy_region = {};
+  copy_region.srcOffset = source_offset;
+  copy_region.dstOffset = 0;
+  copy_region.size = length;
+  deferred_command_buffer_.CmdVkCopyBuffer(source_buffer, staging_buffer, 1,
+                                           &copy_region);
+  return slot;
+}
+
+// Orders a copy into a staging buffer against the previous one into the same
+// buffer, which may still be in flight from when the slot last came around.
+void VulkanCommandProcessor::OrderReadbackStagingWrite(
+    VkBuffer staging_buffer) {
+  PushBufferMemoryBarrier(
+      staging_buffer, 0, VK_WHOLE_SIZE, VK_PIPELINE_STAGE_TRANSFER_BIT,
+      VK_PIPELINE_STAGE_TRANSFER_BIT, VK_ACCESS_TRANSFER_WRITE_BIT,
+      VK_ACCESS_TRANSFER_WRITE_BIT, VK_QUEUE_FAMILY_IGNORED,
+      VK_QUEUE_FAMILY_IGNORED, false);
+}
+
+// Waits for one submission, or for everything including what is still being
+// recorded. The fence wait is what makes a copy visible to the host.
+bool VulkanCommandProcessor::AwaitReadbackStagingSubmission(
+    uint64_t submission) {
+  if (submission == UINT64_MAX) {
+    if (!AwaitAllQueueOperationsCompletion()) {
+      XELOGE(
+          "VulkanCommandProcessor: Failed to complete queue operations for "
+          "staging readback");
+      return false;
+    }
+    return true;
+  }
+  CheckSubmissionCompletionAndDeviceLoss(submission);
+  return GetCompletedSubmission() >= submission;
+}
+
+// Makes a completed GPU write to a staging buffer visible to the CPU read that
+// follows. A no-op on a coherent memory type.
+void VulkanCommandProcessor::InvalidateReadbackStaging(
+    const ReadbackStagingBuffer& buffer) {
+  if (buffer.memory == VK_NULL_HANDLE) {
+    return;
+  }
+  ui::vulkan::util::InvalidateMappedMemoryRange(
+      GetVulkanDevice(), buffer.memory, buffer.memory_type, 0,
+      buffer.memory_size);
+}
+
 void VulkanCommandProcessor::FlushResolveRangeToGuestRam(uint32_t address,
                                                          uint32_t length,
                                                          bool from_snapshot) {
@@ -1779,8 +1907,7 @@ void VulkanCommandProcessor::FlushResolveRangeToGuestRam(uint32_t address,
   // itself in zero-copy mode, since it already aliases guest RAM.
   VkBuffer host_buffer =
       zero_copy ? shared_memory_->buffer() : shared_memory_->host_buffer();
-  if (host_buffer == VK_NULL_HANDLE || !length ||
-      !IsResolveDestinationResident(address, length)) {
+  if (!length || !IsResolveDestinationResident(address, length)) {
     return;
   }
   VkBuffer source_buffer;
@@ -1804,6 +1931,17 @@ void VulkanCommandProcessor::FlushResolveRangeToGuestRam(uint32_t address,
   }
   if (!from_snapshot) {
     shared_memory_->Use(VulkanSharedMemory::Usage::kRead);
+  }
+  if (host_buffer == VK_NULL_HANDLE) {
+    // No guest RAM host buffer, so the release goes out through staging. The
+    // guest is blocked on the coherency poll that got us here, so it takes the
+    // copy just recorded rather than the previous one.
+    ReadbackStagingSlot* slot =
+        StageReadbackFromBuffer(source_buffer, source_offset, address, length);
+    if (slot != nullptr) {
+      FinishReadbackStagingToGuestRam(*slot, address, length, false);
+    }
+    return;
   }
   PushBufferMemoryBarrier(
       host_buffer, VkDeviceSize(address), VkDeviceSize(length),
@@ -3792,9 +3930,12 @@ bool VulkanCommandProcessor::IssueDraw(xenos::PrimitiveType prim_type,
   // host-imported buffer (aliasing guest RAM) so memexport output stays CPU
   // coherent (fixing the page false-sharing clobber) and consumers read it
   // directly. Only texture-sampled ranges are copied into the device buffer
-  // (EnsureMemexportRangeInDeviceBuffer). Inert without the host buffer.
+  // (EnsureMemexportRangeInDeviceBuffer). Off without the host buffer, where
+  // the staging readback carries the output instead, and when memexport_enable
+  // asks for device-local output.
   bool route_to_host = false;
-  if (shared_memory_host_and_edram_descriptor_set_ != VK_NULL_HANDLE) {
+  if (cvars::memexport_enable &&
+      shared_memory_host_and_edram_descriptor_set_ != VK_NULL_HANDLE) {
     route_to_host =
         memexport_used_vertex || memexport_used_pixel ||
         (any_memexport_pages_written_ &&
@@ -4022,18 +4163,109 @@ bool VulkanCommandProcessor::IssueDraw(xenos::PrimitiveType prim_type,
                                       !route_to_host);
   }
 
-  if (route_to_host && !memexport_ranges_.empty()) {
-    // Producer draw: output landed in host_buffer_ (guest RAM), already CPU
-    // coherent, so no readback. Just record the written pages. Consumers then
-    // route to host_buffer_ (geometry) or copy their own range into the device
-    // buffer on demand (texture loads).
-    for (const draw_util::MemExportRange& memexport_range : memexport_ranges_) {
-      MarkMemexportPagesWritten(memexport_range.base_address_dwords << 2,
-                                memexport_range.size_bytes);
+  if (!memexport_ranges_.empty()) {
+    if (route_to_host) {
+      // Producer draw: output landed in host_buffer_ (guest RAM), already CPU
+      // coherent, so no readback. Just record the written pages. Consumers then
+      // route to host_buffer_ (geometry) or copy their own range into the
+      // device buffer on demand (texture loads).
+      for (const draw_util::MemExportRange& memexport_range :
+           memexport_ranges_) {
+        MarkMemexportPagesWritten(memexport_range.base_address_dwords << 2,
+                                  memexport_range.size_bytes);
+      }
+    } else if (cvars::memexport_enable && !shared_memory_->is_zero_copy()) {
+      // No host buffer to route to, and buffer_ is device-local, so the CPU
+      // only sees the output if it is read back. Under zero-copy buffer_ is
+      // guest RAM already, and a readback there would clobber it.
+      StageMemexportReadback();
     }
   }
 
   return true;
+}
+
+// Records copies of this draw's export output into staging buffers. The copy
+// out waits, so it is deferred to FlushMemexportStagingReadback, where one wait
+// covers every producer since the last one.
+void VulkanCommandProcessor::StageMemexportReadback() {
+  if (memexport_ranges_.empty()) {
+    return;
+  }
+  shared_memory_->Use(VulkanSharedMemory::Usage::kRead);
+  SubmitBarriers(true);
+  VkBuffer device_buffer = shared_memory_->buffer();
+  for (const draw_util::MemExportRange& memexport_range : memexport_ranges_) {
+    uint32_t base_bytes = memexport_range.base_address_dwords << 2;
+    if (base_bytes >= SharedMemory::kBufferSize) {
+      continue;
+    }
+    uint32_t size_bytes = std::min(memexport_range.size_bytes,
+                                   SharedMemory::kBufferSize - base_bytes);
+    // The declared capacity can run past what the guest committed, and the
+    // copy out would write guest memory that isn't there.
+    size_bytes = WritableGuestRangeLength(base_bytes, size_bytes);
+    if (!size_bytes) {
+      continue;
+    }
+    uint64_t key = MakeReadbackResolveKey(base_bytes, size_bytes) |
+                   kReadbackStagingMemexportTag;
+    ReadbackStagingSlot* slot = AcquireReadbackStagingSlot(key, size_bytes);
+    if (slot == nullptr) {
+      continue;
+    }
+    VkBuffer staging_buffer = ReadbackStagingWriteBuffer(*slot).buffer;
+    OrderReadbackStagingWrite(staging_buffer);
+    SubmitBarriers(true);
+    InsertDebugMarker("Memexport Readback (staging): 0x%08X, %u bytes",
+                      base_bytes, size_bytes);
+    VkBufferCopy copy_region = {};
+    copy_region.srcOffset = base_bytes;
+    copy_region.dstOffset = 0;
+    copy_region.size = size_bytes;
+    deferred_command_buffer_.CmdVkCopyBuffer(device_buffer, staging_buffer, 1,
+                                             &copy_region);
+    // Its buffer now holds the newer output, so keep one entry, at the back -
+    // copy out order is what decides overlapping ranges.
+    std::erase_if(memexport_staged_, [key](const MemexportStagedRange& staged) {
+      return staged.key == key;
+    });
+    memexport_staged_.push_back({key, base_bytes, size_bytes});
+    // The fence and coherency waits are driven by the page marks.
+    MarkMemexportPagesWritten(base_bytes, size_bytes);
+  }
+}
+
+void VulkanCommandProcessor::FlushMemexportStagingReadback() {
+  if (memexport_staged_.empty()) {
+    return;
+  }
+  // Staged output is about to reach guest RAM, so no fence need await it.
+  memexport_await_pending_ = false;
+  if (!AwaitAllQueueOperationsCompletion()) {
+    XELOGE(
+        "VulkanCommandProcessor: Failed to complete queue operations for "
+        "memexport staging readback");
+    memexport_staged_.clear();
+    return;
+  }
+  for (const MemexportStagedRange& staged : memexport_staged_) {
+    ReadbackStagingSlot* slot = FindReadbackStagingSlot(staged.key);
+    if (slot == nullptr) {
+      continue;
+    }
+    // The guest may have decommitted the range since the draw that staged it.
+    uint32_t length = WritableGuestRangeLength(staged.address, staged.length);
+    if (!length) {
+      continue;
+    }
+    // Export staging never rotates the slot, and its tagged key keeps a resolve
+    // from rotating it either.
+    const ReadbackStagingBuffer& staging = ReadbackStagingWriteBuffer(*slot);
+    InvalidateReadbackStaging(staging);
+    ReadbackStagingToGuestRam(staging, staged.address, length);
+  }
+  memexport_staged_.clear();
 }
 
 bool VulkanCommandProcessor::EnsureMemexportRangeInDeviceBuffer(
@@ -4042,7 +4274,8 @@ bool VulkanCommandProcessor::EnsureMemexportRangeInDeviceBuffer(
   // host_buffer_ (guest RAM), where it actually lives. Doing it on the GPU
   // keeps it ordered against the writes that produced it, which a CPU read
   // cannot be.
-  if (shared_memory_host_and_edram_descriptor_set_ == VK_NULL_HANDLE ||
+  if (!cvars::memexport_enable ||
+      shared_memory_host_and_edram_descriptor_set_ == VK_NULL_HANDLE ||
       !size_bytes || base_bytes >= SharedMemory::kBufferSize) {
     return false;
   }
@@ -4140,8 +4373,11 @@ bool VulkanCommandProcessor::IssueCopy() {
   // itself in zero-copy mode, since it already aliases guest RAM.
   VkBuffer resolve_host_buffer =
       zero_copy ? shared_memory_->buffer() : shared_memory_->host_buffer();
+  // Without it the output goes through a staging buffer. Which resolves are
+  // copied is decided the same way either path, but a copy that would have been
+  // asynchronous takes the previous one rather than waiting for this one.
+  const bool staging_fallback = resolve_host_buffer == VK_NULL_HANDLE;
   if (readback_mode != ReadbackResolveMode::kDisabled && written_length > 0 &&
-      resolve_host_buffer != VK_NULL_HANDLE &&
       IsResolveDestinationResident(written_address, written_length)) {
     bool stall_after_copy;
     ResolveHostCopyAction copy_action = DecideResolveHostCopy(
@@ -4158,6 +4394,10 @@ bool VulkanCommandProcessor::IssueCopy() {
       // A snapshot hold never stalls, nothing is reaching guest RAM yet.
       stall_after_copy = false;
     }
+    // A copy that would not have stalled takes the previous one instead of
+    // waiting for this one. A coherency release always stalls, so it is never
+    // handed data a frame old.
+    const bool staging_deferred = !stall_after_copy;
 
     // is_scaled reflects this resolve, not the global scale. A native resolve
     // under a scale threshold, and the fallback when the scaled buffer is
@@ -4169,10 +4409,23 @@ bool VulkanCommandProcessor::IssueCopy() {
         PopDebugMarker();
         return true;
       }
-      // Non-scaled: copy the resolved range straight from the device buffer
-      // into host_buffer_ (guest RAM).
       VkBuffer resolve_device_buffer = shared_memory_->buffer();
       shared_memory_->Use(VulkanSharedMemory::Usage::kRead);
+      if (staging_fallback) {
+        ReadbackStagingSlot* slot =
+            StageReadbackFromBuffer(resolve_device_buffer, written_address,
+                                    written_address, written_length);
+        // Closing the marker scope first - the copy out may wait for the GPU,
+        // and a label left open would be ended in the next submission.
+        PopDebugMarker();
+        if (slot != nullptr) {
+          FinishReadbackStagingToGuestRam(*slot, written_address,
+                                          written_length, staging_deferred);
+        }
+        return true;
+      }
+      // Non-scaled: copy the resolved range straight from the device buffer
+      // into host_buffer_ (guest RAM).
       // Order prior memexport and resolve writes to host_buffer_ before this
       // copy.
       PushBufferMemoryBarrier(
@@ -4261,9 +4514,11 @@ bool VulkanCommandProcessor::IssueCopy() {
     uint64_t source_offset = scaled_start - buffer_base;
 
     // The downscale writes 1x data straight into guest RAM at the resolved
-    // range, or into a hold snapshot for a held resolve.
+    // range, into a hold snapshot for a held resolve, or into a staging buffer
+    // to be copied out on the CPU where guest RAM isn't mapped for the GPU.
     VkBuffer dest_buffer = resolve_host_buffer;
     VkDeviceSize dest_offset = written_address;
+    ReadbackStagingSlot* dest_staging = nullptr;
     if (to_hold_snapshot) {
       ResolveHoldSnapshotBuffer* snapshot =
           AcquireResolveHoldSnapshot(written_address, readback_length);
@@ -4274,6 +4529,18 @@ bool VulkanCommandProcessor::IssueCopy() {
         return true;
       }
       dest_buffer = snapshot->buffer;
+      dest_offset = 0;
+    } else if (staging_fallback) {
+      dest_staging = AcquireReadbackStagingSlot(
+          MakeReadbackResolveKey(written_address, readback_length),
+          readback_length);
+      if (dest_staging == nullptr) {
+        if (debug_markers_enabled_) {
+          PopDebugMarker();
+        }
+        return true;
+      }
+      dest_buffer = ReadbackStagingWriteBuffer(*dest_staging).buffer;
       dest_offset = 0;
     }
 
@@ -4540,6 +4807,18 @@ bool VulkanCommandProcessor::IssueCopy() {
       }
       return true;
     }
+    if (dest_staging != nullptr) {
+      // Closing both marker scopes first - the copy out may wait for the GPU,
+      // and a label left open would be ended in the next submission.
+      PopDebugMarker();
+      if (debug_markers_enabled_) {
+        PopDebugMarker();
+      }
+      FinishReadbackStagingToGuestRam(*dest_staging, written_address,
+                                      readback_length, staging_deferred);
+      return true;
+    }
+
     // Make the copy visible to within-frame consumers reading host_buffer_
     // (route_to_host draws sampling guest RAM as index, vertex or texture, and
     // EnsureMemexportRangeInDeviceBuffer copying out of it).
@@ -5651,6 +5930,10 @@ bool VulkanCommandProcessor::EndSubmission(bool is_swap) {
     // Submission already closed now, so minus 1.
     closed_frame_submissions_[(frame_current_++) % kMaxFramesInFlight] =
         GetCurrentSubmission() - 1;
+    // Backstop for export output no fence or coherency request has asked for,
+    // so it can't sit staged indefinitely.
+    FlushMemexportStagingReadback();
+    EvictOldReadbackStaging();
 
     if (cache_clear_requested_ && AwaitAllQueueOperationsCompletion()) {
       cache_clear_requested_ = false;

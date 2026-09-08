@@ -41,6 +41,7 @@ DEFINE_bool(d3d12_bindless, true,
 DECLARE_bool(clear_memory_page_state);
 DECLARE_bool(d3d12_debug);
 DECLARE_bool(gpu_debug_markers);
+DECLARE_bool(memexport_enable);
 DECLARE_bool(submit_on_primary_buffer_end);
 
 namespace xe {
@@ -107,6 +108,15 @@ void D3D12CommandProcessor::ClearCaches() {
 
 void D3D12CommandProcessor::InvalidateGpuMemory() {
   shared_memory_->InvalidateAllPages();
+}
+
+void D3D12CommandProcessor::ClearReadbackBuffers() {
+  if (AwaitAllQueueOperationsCompletion()) {
+    ClearReadbackStagingBuffers();
+    // Their staging buffers are gone, so there is nothing left to copy out.
+    memexport_staged_.clear();
+    pending_resolve_staging_ = PendingResolveStaging();
+  }
 }
 
 void D3D12CommandProcessor::InitializeShaderStorage(
@@ -1405,6 +1415,8 @@ void D3D12CommandProcessor::ShutdownContext() {
   AwaitAllQueueOperationsCompletion();
 
   ResetMemexportPages();
+  memexport_staged_.clear();
+  pending_resolve_staging_ = PendingResolveStaging();
   ResetResolveReadWatch();
 
   ShutdownZPDQueryResources();
@@ -1413,8 +1425,10 @@ void D3D12CommandProcessor::ShutdownContext() {
   ui::d3d12::util::ReleaseAndNull(scratch_buffer_);
   scratch_buffer_size_ = 0;
 
-  // Before the deletion list is drained, hold snapshots are freed through it.
+  // Before the deletion list is drained, hold snapshots and staging buffers are
+  // freed through it.
   ClearResolveHoldSnapshots();
+  ClearReadbackStagingBuffers();
 
   for (const std::pair<uint64_t, ID3D12Resource*>& resource_for_deletion :
        resources_for_deletion_) {
@@ -2338,8 +2352,8 @@ Shader* D3D12CommandProcessor::LoadShader(xenos::ShaderType shader_type,
 
 bool D3D12CommandProcessor::EnsureMemexportRangeInDeviceBuffer(
     uint32_t base_bytes, uint32_t size_bytes) {
-  if (shared_memory_->GetHostBuffer() == nullptr || !size_bytes ||
-      base_bytes >= SharedMemory::kBufferSize) {
+  if (!cvars::memexport_enable || shared_memory_->GetHostBuffer() == nullptr ||
+      !size_bytes || base_bytes >= SharedMemory::kBufferSize) {
     return false;
   }
   size_bytes = std::min(size_bytes, SharedMemory::kBufferSize - base_bytes);
@@ -2392,6 +2406,82 @@ void D3D12CommandProcessor::DestroyResolveHoldSnapshotBuffer(
                                        buffer.resource.Detach());
 }
 
+bool D3D12CommandProcessor::CreateReadbackStagingBuffer(
+    ReadbackStagingBuffer& buffer, uint32_t size) {
+  const ui::d3d12::D3D12Provider& provider = GetD3D12Provider();
+  D3D12_RESOURCE_DESC buffer_desc;
+  ui::d3d12::util::FillBufferResourceDesc(buffer_desc, size,
+                                          D3D12_RESOURCE_FLAG_NONE);
+  ID3D12Resource* resource;
+  if (FAILED(provider.GetDevice()->CreateCommittedResource(
+          &ui::d3d12::util::kHeapPropertiesReadback,
+          provider.GetHeapFlagCreateNotZeroed(), &buffer_desc,
+          D3D12_RESOURCE_STATE_COPY_DEST, nullptr, IID_PPV_ARGS(&resource)))) {
+    XELOGE("Failed to create a {} KB readback staging buffer", size >> 10);
+    return false;
+  }
+  // Persistently mapped, and the whole thing may be read.
+  if (FAILED(resource->Map(0, nullptr, &buffer.mapped))) {
+    XELOGE("Failed to map a {} KB readback staging buffer", size >> 10);
+    buffer.mapped = nullptr;
+    resource->Release();
+    return false;
+  }
+  resource->SetName(L"Readback Staging Buffer");
+  buffer.resource.Attach(resource);
+  return true;
+}
+
+void D3D12CommandProcessor::DestroyReadbackStagingBuffer(
+    ReadbackStagingBuffer& buffer) {
+  if (!buffer.resource) {
+    return;
+  }
+  if (buffer.mapped != nullptr) {
+    buffer.resource->Unmap(0, nullptr);
+    buffer.mapped = nullptr;
+  }
+  // Deferred, a submitted copy may still be writing it.
+  resources_for_deletion_.emplace_back(GetCurrentSubmission(),
+                                       buffer.resource.Detach());
+}
+
+// Records a copy into this range's staging buffer, for the caller to copy out
+// with FinishReadbackStagingToGuestRam once its marker scope is closed.
+D3D12CommandProcessor::ReadbackStagingSlot*
+D3D12CommandProcessor::StageReadbackFromBuffer(ID3D12Resource* source_buffer,
+                                               uint32_t source_offset,
+                                               uint32_t address,
+                                               uint32_t length) {
+  ReadbackStagingSlot* slot = AcquireReadbackStagingSlot(
+      MakeReadbackResolveKey(address, length), length);
+  if (slot == nullptr) {
+    return nullptr;
+  }
+  SubmitBarriers();
+  InsertDebugMarker("Readback (staging): 0x%08X, %u bytes", address, length);
+  deferred_command_list_.D3DCopyBufferRegion(
+      ReadbackStagingWriteBuffer(*slot).resource.Get(), 0, source_buffer,
+      source_offset, length);
+  return slot;
+}
+
+// Waits for one submission, or for everything including what is being recorded.
+bool D3D12CommandProcessor::AwaitReadbackStagingSubmission(
+    uint64_t submission) {
+  if (submission == UINT64_MAX) {
+    if (!AwaitAllQueueOperationsCompletion()) {
+      XELOGE(
+          "D3D12CommandProcessor: Failed to complete queue operations for "
+          "staging readback");
+      return false;
+    }
+    return true;
+  }
+  CheckSubmissionCompletion(submission);
+  return GetCompletedSubmission() >= submission;
+}
+
 void D3D12CommandProcessor::FlushResolveRangeToGuestRam(uint32_t address,
                                                         uint32_t length,
                                                         bool from_snapshot) {
@@ -2404,8 +2494,7 @@ void D3D12CommandProcessor::FlushResolveRangeToGuestRam(uint32_t address,
   // itself in zero-copy mode, since it already aliases guest RAM.
   ID3D12Resource* guest_ram_buffer =
       zero_copy ? shared_memory_->GetBuffer() : shared_memory_->GetHostBuffer();
-  if (guest_ram_buffer == nullptr || !length ||
-      !IsResolveDestinationResident(address, length)) {
+  if (!length || !IsResolveDestinationResident(address, length)) {
     return;
   }
   ID3D12Resource* source_buffer;
@@ -2429,6 +2518,17 @@ void D3D12CommandProcessor::FlushResolveRangeToGuestRam(uint32_t address,
   }
   if (!from_snapshot) {
     shared_memory_->UseAsCopySource();
+  }
+  if (guest_ram_buffer == nullptr) {
+    // No guest RAM host buffer, so the release goes out through staging. The
+    // guest is blocked on the coherency poll that got us here, so it takes the
+    // copy just recorded rather than the previous one.
+    ReadbackStagingSlot* slot =
+        StageReadbackFromBuffer(source_buffer, source_offset, address, length);
+    if (slot != nullptr) {
+      FinishReadbackStagingToGuestRam(*slot, address, length, false);
+    }
+    return;
   }
   if (zero_copy) {
     shared_memory_->UseAsCopyDestination();
@@ -2527,10 +2627,11 @@ bool D3D12CommandProcessor::IssueDraw(xenos::PrimitiveType primitive_type,
   // Two-buffer memexport routing: producer draws (memexport_used) and geometry
   // draws consuming memexport output use the host buffer (aliasing guest RAM)
   // so the output stays CPU coherent and consumers read it directly. Only
-  // texture-sampled ranges are copied into the device buffer on demand. Inert
-  // without the host buffer.
+  // texture-sampled ranges are copied into the device buffer on demand. Off
+  // without the host buffer, where the staging readback carries the output
+  // instead, and when memexport_enable asks for device-local output.
   bool route_to_host = false;
-  if (shared_memory_->GetHostBuffer() != nullptr) {
+  if (cvars::memexport_enable && shared_memory_->GetHostBuffer() != nullptr) {
     route_to_host =
         memexport_used ||
         (any_memexport_pages_written_ &&
@@ -3073,10 +3174,91 @@ bool D3D12CommandProcessor::IssueDraw(xenos::PrimitiveType primitive_type,
         MarkMemexportPagesWritten(memexport_range.base_address_dwords << 2,
                                   memexport_range.size_bytes);
       }
+    } else if (cvars::memexport_enable && !shared_memory_->is_zero_copy()) {
+      // No host buffer to route to, and buffer_ is device-local, so the CPU
+      // only sees the output if it is read back. Under zero-copy buffer_ is
+      // guest RAM already, and a readback there would clobber it.
+      StageMemexportReadback();
     }
   }
 
   return true;
+}
+
+// Records copies of this draw's export output into staging buffers. The copy
+// out waits, so it is deferred to FlushMemexportStagingReadback, where one wait
+// covers every producer since the last one.
+void D3D12CommandProcessor::StageMemexportReadback() {
+  if (memexport_ranges_.empty()) {
+    return;
+  }
+  shared_memory_->UseAsCopySource();
+  SubmitBarriers();
+  ID3D12Resource* device_buffer = shared_memory_->GetBuffer();
+  for (const draw_util::MemExportRange& memexport_range : memexport_ranges_) {
+    uint32_t base_bytes = memexport_range.base_address_dwords << 2;
+    if (base_bytes >= SharedMemory::kBufferSize) {
+      continue;
+    }
+    uint32_t size_bytes = std::min(memexport_range.size_bytes,
+                                   SharedMemory::kBufferSize - base_bytes);
+    // The declared capacity can run past what the guest committed, and the
+    // copy out would write guest memory that isn't there.
+    size_bytes = WritableGuestRangeLength(base_bytes, size_bytes);
+    if (!size_bytes) {
+      continue;
+    }
+    uint64_t key = MakeReadbackResolveKey(base_bytes, size_bytes) |
+                   kReadbackStagingMemexportTag;
+    ReadbackStagingSlot* slot = AcquireReadbackStagingSlot(key, size_bytes);
+    if (slot == nullptr) {
+      continue;
+    }
+    InsertDebugMarker("Memexport Readback (staging): 0x%08X, %u bytes",
+                      base_bytes, size_bytes);
+    deferred_command_list_.D3DCopyBufferRegion(
+        ReadbackStagingWriteBuffer(*slot).resource.Get(), 0, device_buffer,
+        base_bytes, size_bytes);
+    // Its buffer now holds the newer output, so keep one entry, at the back -
+    // copy out order is what decides overlapping ranges.
+    std::erase_if(memexport_staged_, [key](const MemexportStagedRange& staged) {
+      return staged.key == key;
+    });
+    memexport_staged_.push_back({key, base_bytes, size_bytes});
+    // The fence and coherency waits are driven by the page marks.
+    MarkMemexportPagesWritten(base_bytes, size_bytes);
+  }
+}
+
+void D3D12CommandProcessor::FlushMemexportStagingReadback() {
+  if (memexport_staged_.empty()) {
+    return;
+  }
+  // Staged output is about to reach guest RAM, so no fence need await it.
+  memexport_await_pending_ = false;
+  if (!AwaitAllQueueOperationsCompletion()) {
+    XELOGE(
+        "D3D12CommandProcessor: Failed to complete queue operations for "
+        "memexport staging readback");
+    memexport_staged_.clear();
+    return;
+  }
+  for (const MemexportStagedRange& staged : memexport_staged_) {
+    ReadbackStagingSlot* slot = FindReadbackStagingSlot(staged.key);
+    if (slot == nullptr) {
+      continue;
+    }
+    // The guest may have decommitted the range since the draw that staged it.
+    uint32_t length = WritableGuestRangeLength(staged.address, staged.length);
+    if (!length) {
+      continue;
+    }
+    // Export staging never rotates the slot, and its tagged key keeps a resolve
+    // from rotating it either.
+    ReadbackStagingToGuestRam(ReadbackStagingWriteBuffer(*slot), staged.address,
+                              length);
+  }
+  memexport_staged_.clear();
 }
 
 void D3D12CommandProcessor::InitializeTrace() {
@@ -3142,7 +3324,26 @@ bool D3D12CommandProcessor::IssueCopy() {
     PopDebugMarker();
   }
 
+  // Outside the marker scope - the copy out waits, and a label left open would
+  // be ended in the next submission.
+  FinishPendingResolveStaging();
+
   return result;
+}
+
+// Copies out whatever the resolve staged for readback, if anything.
+void D3D12CommandProcessor::FinishPendingResolveStaging() {
+  PendingResolveStaging pending = pending_resolve_staging_;
+  pending_resolve_staging_ = PendingResolveStaging();
+  if (!pending.length) {
+    return;
+  }
+  ReadbackStagingSlot* slot = FindReadbackStagingSlot(pending.key);
+  if (slot == nullptr) {
+    return;
+  }
+  FinishReadbackStagingToGuestRam(*slot, pending.address, pending.length,
+                                  pending.deferred);
 }
 XE_NOINLINE
 bool D3D12CommandProcessor::IssueCopy_ReadbackResolvePath() {
@@ -3167,8 +3368,11 @@ bool D3D12CommandProcessor::IssueCopy_ReadbackResolvePath() {
   // itself in zero-copy mode, since it already aliases guest RAM.
   ID3D12Resource* guest_ram_buffer =
       zero_copy ? shared_memory_->GetBuffer() : shared_memory_->GetHostBuffer();
-  if (guest_ram_buffer == nullptr ||
-      !IsResolveDestinationResident(written_address, written_length)) {
+  // Without it the output goes through a staging buffer. Which resolves are
+  // copied is decided the same way either path, but a copy that would have been
+  // asynchronous takes the previous one rather than waiting for this one.
+  const bool staging_fallback = guest_ram_buffer == nullptr;
+  if (!IsResolveDestinationResident(written_address, written_length)) {
     return true;
   }
 
@@ -3192,6 +3396,11 @@ bool D3D12CommandProcessor::IssueCopy_ReadbackResolvePath() {
   }
   ID3D12Resource* dest_buffer = guest_ram_buffer;
   uint32_t dest_offset = written_address;
+  // Set instead of dest_buffer when the copy out happens on the CPU. A scaled
+  // resolve copies out the downscaled length, not the written one.
+  ReadbackStagingSlot* dest_staging = nullptr;
+  uint64_t dest_staging_key = 0;
+  uint32_t dest_staging_length = written_length;
   // A snapshot hold never stalls, nothing is reaching guest RAM yet.
   if (to_hold_snapshot) {
     stall_after_copy = false;
@@ -3229,6 +3438,17 @@ bool D3D12CommandProcessor::IssueCopy_ReadbackResolvePath() {
       }
       dest_buffer = snapshot->resource.Get();
       dest_offset = 0;
+    } else if (staging_fallback) {
+      uint64_t staging_key =
+          MakeReadbackResolveKey(written_address, readback_length);
+      dest_staging = AcquireReadbackStagingSlot(staging_key, readback_length);
+      if (dest_staging == nullptr) {
+        return true;
+      }
+      dest_buffer = ReadbackStagingWriteBuffer(*dest_staging).resource.Get();
+      dest_offset = 0;
+      dest_staging_key = staging_key;
+      dest_staging_length = readback_length;
     }
 
     // Ensure intermediate buffer for GPU downscaling is large enough
@@ -3361,6 +3581,8 @@ bool D3D12CommandProcessor::IssueCopy_ReadbackResolvePath() {
     if (to_hold_snapshot) {
       PushTransitionBarrier(dest_buffer, D3D12_RESOURCE_STATE_COPY_SOURCE,
                             D3D12_RESOURCE_STATE_COPY_DEST);
+    } else if (dest_staging != nullptr) {
+      // Readback heaps stay in COPY_DEST, so there is nothing to transition.
     } else if (zero_copy) {
       shared_memory_->UseAsCopyDestination();
     } else {
@@ -3392,8 +3614,18 @@ bool D3D12CommandProcessor::IssueCopy_ReadbackResolvePath() {
 
     PopDebugMarker();
   } else {
-    // Non-scaled: copy straight from the device buffer into host_buffer_.
     shared_memory_->UseAsCopySource();
+    if (staging_fallback) {
+      if (StageReadbackFromBuffer(shared_memory_->GetBuffer(), written_address,
+                                  written_address, written_length) != nullptr) {
+        // IssueCopy copies it out once the marker scope is closed.
+        pending_resolve_staging_ = {
+            MakeReadbackResolveKey(written_address, written_length),
+            written_address, written_length, !stall_after_copy};
+      }
+      return true;
+    }
+    // Non-scaled: copy straight from the device buffer into host_buffer_.
     shared_memory_->UseHostAsCopyDestination();
     SubmitBarriers();
     InsertDebugMarker("Resolve Readback: 0x%08X, %u bytes", written_address,
@@ -3401,6 +3633,14 @@ bool D3D12CommandProcessor::IssueCopy_ReadbackResolvePath() {
     deferred_command_list_.D3DCopyBufferRegion(dest_buffer, dest_offset,
                                                shared_memory_->GetBuffer(),
                                                written_address, written_length);
+  }
+
+  if (dest_staging != nullptr) {
+    // Only now that the copy is recorded, so an early return above leaves
+    // nothing to copy out.
+    pending_resolve_staging_ = {dest_staging_key, written_address,
+                                dest_staging_length, !stall_after_copy};
+    return true;
   }
 
   if (stall_after_copy) {
@@ -3777,6 +4017,10 @@ bool D3D12CommandProcessor::EndSubmission(bool is_swap) {
     // Submission already closed now, so minus 1.
     closed_frame_submissions_[(frame_current_++) % kQueueFrames] =
         GetCurrentSubmission() - 1;
+    // Backstop for export output no fence or coherency request has asked for,
+    // so it can't sit staged indefinitely.
+    FlushMemexportStagingReadback();
+    EvictOldReadbackStaging();
 
     if (cache_clear_requested_ && AwaitAllQueueOperationsCompletion()) {
       cache_clear_requested_ = false;

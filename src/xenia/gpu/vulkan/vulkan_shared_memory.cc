@@ -21,7 +21,7 @@
 #include "xenia/ui/vulkan/vulkan_util.h"
 
 DECLARE_bool(gpu_allow_invalid_upload_range);
-DECLARE_bool(memexport_enable);
+DECLARE_bool(enable_host_buffer);
 DECLARE_bool(shared_memory_zero_copy);
 
 DEFINE_bool(vulkan_sparse_shared_memory, true,
@@ -216,8 +216,9 @@ bool VulkanSharedMemory::Initialize() {
       xe::align(ui::vulkan::VulkanUploadBufferPool::kDefaultPageSize,
                 size_t(1) << page_size_log2()));
 
-  // Second (host-imported) buffer for memexport-touching draws on the
-  // device-local path, so their output stays coherent with the CPU.
+  // Second (host-imported) buffer for memexport-touching draws and resolve
+  // readback on the device-local path, so their output stays coherent with the
+  // CPU.
   TryInitializeHostBuffer();
 
   return true;
@@ -379,23 +380,23 @@ bool VulkanSharedMemory::TryInitializeZeroCopy() {
 }
 
 void VulkanSharedMemory::TryInitializeHostBuffer() {
-  if (!cvars::memexport_enable) {
+  if (!cvars::enable_host_buffer) {
     return;
   }
-  // A second, host-imported (guest RAM) buffer used only for memexport-touching
-  // draws while the main buffer stays fast device-local. Non-sparse, so it can
-  // accept host memory where the sparse buffer can't.
+  // A second, host-imported (guest RAM) buffer written by memexport-touching
+  // draws and resolve readback while the main buffer stays fast device-local.
+  // Non-sparse, so it can accept host memory where the sparse buffer can't.
   if (!CreateImportedGuestRamBuffer(host_buffer_, host_buffer_memory_)) {
-    // Without it memexport output stays device-local and the CPU never sees it.
+    // Without it memexport and resolve output stays device-local, so both fall
+    // back to reading back through a staging buffer.
     XELOGW(
-        "Shared memory: no host buffer for memexport - memexport_enable is set "
-        "but the import failed, games reading exported data on the CPU will "
-        "misbehave");
+        "Shared memory: guest RAM import failed - memexport and resolve "
+        "readback fall back to staging copies");
     host_buffer_ = VK_NULL_HANDLE;
     host_buffer_memory_ = VK_NULL_HANDLE;
     return;
   }
-  XELOGI("Shared memory: host buffer for memexport ranges ready");
+  XELOGI("Shared memory: guest RAM host buffer ready");
 }
 
 void VulkanSharedMemory::Shutdown(bool from_destructor) {

@@ -20,7 +20,7 @@
 #include "xenia/ui/d3d12/d3d12_util.h"
 
 DECLARE_bool(gpu_allow_invalid_upload_range);
-DECLARE_bool(memexport_enable);
+DECLARE_bool(enable_host_buffer);
 DECLARE_bool(tiled_shared_memory);
 DECLARE_bool(shared_memory_zero_copy);
 
@@ -208,17 +208,17 @@ bool D3D12SharedMemory::ImportGuestRamHeap(void*& out_view,
 }
 
 void D3D12SharedMemory::TryInitializeHostBuffer() {
-  if (!cvars::memexport_enable) {
+  if (!cvars::enable_host_buffer) {
     return;
   }
   void* view = nullptr;
   ID3D12Heap* heap = nullptr;
   if (!ImportGuestRamHeap(view, heap)) {
-    // Without it memexport output stays device-local and the CPU never sees it.
+    // Without it memexport and resolve output stays device-local, so both fall
+    // back to reading back through a staging buffer.
     XELOGW(
-        "Shared memory: no host buffer for memexport - memexport_enable is set "
-        "but the import failed, games reading exported data on the CPU will "
-        "misbehave");
+        "Shared memory: guest RAM import failed - memexport and resolve "
+        "readback fall back to staging copies");
     return;
   }
 
@@ -249,7 +249,7 @@ void D3D12SharedMemory::TryInitializeHostBuffer() {
   host_buffer_heap_ = heap;
   host_buffer_view_ = view;
   host_buffer_gpu_address_ = host_buffer_->GetGPUVirtualAddress();
-  XELOGI("Shared memory: host buffer for memexport ranges ready");
+  XELOGI("Shared memory: guest RAM host buffer ready");
 }
 
 bool D3D12SharedMemory::TryInitializeZeroCopy() {

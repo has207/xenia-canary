@@ -15,6 +15,7 @@
 #include <atomic>
 #include <climits>
 #include <cstdint>
+#include <cstring>
 #include <deque>
 #include <functional>
 #include <memory>
@@ -27,6 +28,7 @@
 #include "xenia/base/assert.h"
 #include "xenia/base/hash.h"
 #include "xenia/base/logging.h"
+#include "xenia/base/memory.h"
 #include "xenia/gpu/command_processor.h"
 #include "xenia/gpu/draw_util.h"
 #include "xenia/gpu/gpu_flags.h"
@@ -153,6 +155,7 @@ class VulkanCommandProcessor final : public CommandProcessor {
 
   void ClearCaches() override;
   void InvalidateGpuMemory() override;
+  void ClearReadbackBuffers() override;
 
   void TracePlaybackWroteMemory(uint32_t base_ptr, uint32_t length) override;
 
@@ -327,6 +330,41 @@ class VulkanCommandProcessor final : public CommandProcessor {
                                        uint32_t size);
   void DestroyResolveHoldSnapshotBuffer(ResolveHoldSnapshotBuffer& buffer);
   void PrepareResolveHoldSnapshotEviction();
+
+  // Staging storage for command_processor_readback_staging.inc, which owns the
+  // pool itself. Used only without the guest RAM host buffer.
+  struct ReadbackStagingBuffer {
+    VkBuffer buffer = VK_NULL_HANDLE;
+    VkDeviceMemory memory = VK_NULL_HANDLE;
+    void* mapped = nullptr;
+    uint32_t memory_type = 0;
+    VkDeviceSize memory_size = 0;
+  };
+  bool CreateReadbackStagingBuffer(ReadbackStagingBuffer& buffer,
+                                   uint32_t size);
+  void DestroyReadbackStagingBuffer(ReadbackStagingBuffer& buffer);
+  void PrepareReadbackStagingEviction();
+  void InvalidateReadbackStaging(const ReadbackStagingBuffer& buffer);
+  bool AwaitReadbackStagingSubmission(uint64_t submission);
+  // The staging pool, shared with the D3D12 backend. Included here rather than
+  // with the other fragments because the declarations below name its
+  // ReadbackStagingSlot.
+#include "../command_processor_readback_staging.inc"
+  void OrderReadbackStagingWrite(VkBuffer staging_buffer);
+  ReadbackStagingSlot* StageReadbackFromBuffer(VkBuffer source_buffer,
+                                               VkDeviceSize source_offset,
+                                               uint32_t address,
+                                               uint32_t length);
+  void StageMemexportReadback();
+  void FlushMemexportStagingReadback();
+  // Export ranges staged but not yet copied out, in record order - a later
+  // copy of an overlapping range has to win.
+  struct MemexportStagedRange {
+    uint64_t key;
+    uint32_t address;
+    uint32_t length;
+  };
+  std::vector<MemexportStagedRange> memexport_staged_;
 
   void IssueSwap(uint32_t frontbuffer_ptr, uint32_t frontbuffer_width,
                  uint32_t frontbuffer_height) override;

@@ -71,7 +71,8 @@ void ImGuiPerformanceDialog::LoadCurrentSettings() {
   }
   readback_resolve_sync_ = cvars::readback_resolve_sync;
 
-  // Load Memexport Fence Wait setting
+  // Load Memory Export settings
+  memexport_enable_ = cvars::memexport_enable;
   memexport_await_fences_ = cvars::memexport_await_fences;
 
   // Load Frame Rate Limit (FPS, 0 = unlimited)
@@ -124,6 +125,13 @@ void ImGuiPerformanceDialog::OnReadbackResolveSyncChanged(bool enabled) {
   config::SaveGameConfigSetting(emulator_window_->emulator(), "GPU",
                                 "readback_resolve_sync", enabled);
   ShowNotification("Readback Resolve Sync", enabled ? "Enabled" : "Disabled");
+}
+
+void ImGuiPerformanceDialog::OnMemexportEnableChanged(bool enabled) {
+  gpu::SaveGPUSetting(gpu::GPUSetting::MemexportEnable, enabled);
+  config::SaveGameConfigSetting(emulator_window_->emulator(), "GPU",
+                                "memexport_enable", enabled);
+  ShowNotification("Memory Export", enabled ? "Enabled" : "Disabled");
 }
 
 void ImGuiPerformanceDialog::OnMemexportAwaitFencesChanged(bool enabled) {
@@ -249,6 +257,13 @@ void ImGuiPerformanceDialog::OnDraw(ImGuiIO& io) {
           OnReadbackResolveChanged(i);
         }
       }
+      if (is_selected) {
+        // Gamepad nav otherwise starts on the first option, and the A press
+        // that opened the dialog activates it. Starting on the current one
+        // makes that stray activation a no-op, since the handler above only
+        // fires on a change.
+        ImGui::SetItemDefaultFocus();
+      }
 
       if (is_highlighted && !is_selected) {
         ImGui::PopStyleColor();
@@ -258,10 +273,14 @@ void ImGuiPerformanceDialog::OnDraw(ImGuiIO& io) {
         ImGui::SameLine();
       }
     }
+    // Nothing is copied back to time when readback is off.
+    const bool readback_resolve_on = readback_resolve_mode_ != 0;
+    ImGui::BeginDisabled(!readback_resolve_on);
     if (ImGui::Checkbox("Synchronous copies (stall GPU)",
                         &readback_resolve_sync_)) {
       OnReadbackResolveSyncChanged(readback_resolve_sync_);
     }
+    ImGui::EndDisabled();
     ImGui::PopID();
     ImGui::Unindent(10);
 
@@ -275,10 +294,18 @@ void ImGuiPerformanceDialog::OnDraw(ImGuiIO& io) {
 
     ImGui::Indent(10);
     ImGui::PushID("memexport");
+    if (ImGui::Checkbox("Make exported data visible to the CPU",
+                        &memexport_enable_)) {
+      OnMemexportEnableChanged(memexport_enable_);
+    }
+    // Nothing reaches guest RAM to be awaited when export output stays
+    // device-local.
+    ImGui::BeginDisabled(!memexport_enable_);
     if (ImGui::Checkbox("Wait for exports before fences (stall GPU)",
                         &memexport_await_fences_)) {
       OnMemexportAwaitFencesChanged(memexport_await_fences_);
     }
+    ImGui::EndDisabled();
     ImGui::PopID();
     ImGui::Unindent(10);
 

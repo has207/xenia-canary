@@ -28,22 +28,33 @@
 //     have to drain rather than defer.
 //   void FlushResolveRangeToGuestRam(uint32_t, uint32_t, bool from_snapshot)
 
-// Whether the guest physical range a resolve targets is committed and writable,
-// so copying the resolve back into guest RAM is safe. False means skip the
-// copy.
-bool IsResolveDestinationResident(uint32_t address, uint32_t length) const {
+// How much of a guest range is committed and writable, so copying GPU output
+// back into it is safe. Writing past that corrupts memory the guest never
+// committed.
+uint32_t WritableGuestRangeLength(uint32_t address, uint32_t length) const {
   VirtualHeap* physical_heap = memory_->GetPhysicalHeap();
-  if (!physical_heap) {
-    return false;
+  if (!physical_heap || !length) {
+    return 0;
   }
   HeapAllocationInfo alloc_info;
   if (!physical_heap->QueryRegionInfo(address, &alloc_info) ||
       !(alloc_info.state & kMemoryAllocationCommit) ||
       !IsWritableProtect(alloc_info.protect)) {
-    return false;
+    return 0;
   }
-  return uint64_t(address) + length <=
-         uint64_t(alloc_info.base_address) + alloc_info.region_size;
+  uint64_t region_end =
+      uint64_t(alloc_info.base_address) + alloc_info.region_size;
+  if (uint64_t(address) >= region_end) {
+    return 0;
+  }
+  return uint32_t(std::min(uint64_t(length), region_end - uint64_t(address)));
+}
+
+// Whether a resolve's whole destination is writable - it is copied back whole
+// or not at all. An empty range still has to name writable memory.
+bool IsResolveDestinationResident(uint32_t address, uint32_t length) const {
+  return length ? WritableGuestRangeLength(address, length) == length
+                : WritableGuestRangeLength(address, 1) != 0;
 }
 
 // Marks the guest pages the CPU has read since a resolve wrote them, from the

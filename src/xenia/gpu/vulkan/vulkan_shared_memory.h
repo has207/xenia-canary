@@ -56,8 +56,9 @@ class VulkanSharedMemory : public SharedMemory {
   VkBuffer buffer() const { return buffer_; }
 
   // A host-imported (guest RAM) copy of the buffer, or VK_NULL_HANDLE if
-  // unavailable. Bound instead of buffer() for memexport-touching draws so
-  // their output is coherent with the CPU (no clobber) - it aliases guest RAM.
+  // unavailable. Bound instead of buffer() for memexport-touching draws, and
+  // the destination of resolve readback, so their output is coherent with the
+  // CPU (no clobber) - it aliases guest RAM.
   VkBuffer host_buffer() const { return host_buffer_; }
 
   // True when the buffer aliases guest RAM directly
@@ -93,8 +94,9 @@ class VulkanSharedMemory : public SharedMemory {
   // true on success (buffer_/buffer_memory_ populated, zero_copy_ set); false
   // to fall back to the normal device-local path.
   bool TryInitializeZeroCopy();
-  // Attempts to create host_buffer_ for the hybrid two-buffer path. No-op on
-  // failure (host_buffer_ stays null).
+  // Attempts to create host_buffer_ for the hybrid two-buffer path. No-op when
+  // enable_host_buffer is off or on failure (host_buffer_ stays null and
+  // memexport and resolve readback go through staging copies instead).
   void TryInitializeHostBuffer();
 
   VkBuffer buffer_ = VK_NULL_HANDLE;
@@ -104,7 +106,8 @@ class VulkanSharedMemory : public SharedMemory {
   // Buffer memory is imported guest RAM - no uploads or readback copies needed.
   bool zero_copy_ = false;
 
-  // Second buffer aliasing guest RAM, bound for memexport-touching draws.
+  // Second buffer aliasing guest RAM, bound for memexport-touching draws and
+  // written by resolve readback.
   VkBuffer host_buffer_ = VK_NULL_HANDLE;
   VkDeviceMemory host_buffer_memory_ = VK_NULL_HANDLE;
 

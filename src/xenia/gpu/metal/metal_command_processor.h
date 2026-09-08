@@ -934,6 +934,9 @@ class MetalCommandProcessor : public CommandProcessor {
 
   // Memexport tracking for shared memory invalidation.
   std::vector<draw_util::MemExportRange> memexport_ranges_;
+  // Export output lands in guest RAM through the shared buffer, so nothing is
+  // ever staged for readback.
+  void FlushMemexportStagingReadback() {}
   // Page tracking so a fence the guest reads can await export output. The
   // fragment's host/device routing half is unused - Metal has one buffer.
 #include "../command_processor_memexport.inc"

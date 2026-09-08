@@ -44,9 +44,9 @@ class D3D12SharedMemory : public SharedMemory {
 
   // A second buffer placed on a heap imported from guest RAM
   // (OpenExistingHeapFromAddress), or null if unavailable. Bound instead of
-  // buffer() for memexport-touching draws so their output is coherent with the
-  // CPU (no clobber, since it aliases guest RAM). Mirrors the Vulkan
-  // host_buffer().
+  // buffer() for memexport-touching draws, and the destination of resolve
+  // readback, so their output is coherent with the CPU (no clobber, since it
+  // aliases guest RAM). Mirrors the Vulkan host_buffer().
   ID3D12Resource* GetHostBuffer() const { return host_buffer_; }
   D3D12_GPU_VIRTUAL_ADDRESS GetHostGPUAddress() const {
     return host_buffer_gpu_address_;
@@ -163,8 +163,9 @@ class D3D12SharedMemory : public SharedMemory {
   D3D12_RESOURCE_STATES host_buffer_state_ = D3D12_RESOURCE_STATE_COMMON;
   bool host_buffer_uav_writes_commit_needed_ = false;
   void CommitHostUAVWritesAndTransitionBuffer(D3D12_RESOURCE_STATES new_state);
-  // Imports guest RAM as host_buffer_. No-op on failure (host_buffer_ stays
-  // null and the device-local path is used unchanged).
+  // Imports guest RAM as host_buffer_. No-op when enable_host_buffer is off or
+  // on failure (host_buffer_ stays null and memexport and resolve readback go
+  // through staging copies instead).
   void TryInitializeHostBuffer();
   // Maps a dedicated guest RAM view and opens it as a D3D12 heap
   // (OpenExistingHeapFromAddress). Returns true with out_view/out_heap set;

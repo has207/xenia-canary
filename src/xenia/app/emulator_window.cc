@@ -180,6 +180,7 @@ DECLARE_bool(guide_button);
 DECLARE_string(config);
 
 DECLARE_bool(clear_memory_page_state);
+DECLARE_bool(memexport_enable);
 DECLARE_bool(memexport_await_fences);
 
 DECLARE_string(readback_resolve);
@@ -3507,6 +3508,11 @@ void EmulatorWindow::ToggleGPUSetting(gpu::GPUSetting setting) {
       new_value = !cvars::clear_memory_page_state;
       SaveGPUSetting(GPUSetting::ClearMemoryPageState, new_value);
       cvar_name = "clear_memory_page_state";
+      break;
+    case GPUSetting::MemexportEnable:
+      new_value = !cvars::memexport_enable;
+      SaveGPUSetting(GPUSetting::MemexportEnable, new_value);
+      cvar_name = "memexport_enable";
       break;
     case GPUSetting::MemexportAwaitFences:
       new_value = !cvars::memexport_await_fences;

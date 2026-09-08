@@ -32,6 +32,17 @@ DEFINE_bool(
     "GPU");
 #undef XE_GPU_ZERO_COPY_DEFAULT
 
+DEFINE_bool(
+    enable_host_buffer, true,
+    "Import guest RAM as a second GPU buffer, so memexport output and resolve "
+    "readback reach the CPU in place rather than through a staging copy. With "
+    "it off, or where the driver can't import guest RAM, both fall back to "
+    "copying through a staging buffer, where a resolve readback_resolve_sync "
+    "would have run asynchronously is instead a frame behind. Ignored under "
+    "shared_memory_zero_copy, where the only buffer already aliases guest RAM. "
+    "Applies at title launch.",
+    "GPU");
+
 DEFINE_bool(use_50Hz_mode, false, "Enables usage of PAL-50 mode.", "Console");
 
 DEFINE_path(trace_gpu_prefix, "scratch/gpu/",

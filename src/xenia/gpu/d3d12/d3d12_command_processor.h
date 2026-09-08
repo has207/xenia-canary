@@ -13,6 +13,8 @@
 #include <algorithm>
 #include <array>
 #include <atomic>
+#include <cstdint>
+#include <cstring>
 #include <deque>
 #include <memory>
 #include <optional>
@@ -24,6 +26,7 @@
 
 #include "xenia/base/assert.h"
 #include "xenia/base/logging.h"
+#include "xenia/base/memory.h"
 #include "xenia/gpu/command_processor.h"
 #include "xenia/gpu/d3d12/d3d12_graphics_system.h"
 #include "xenia/gpu/d3d12/d3d12_primitive_processor.h"
@@ -73,6 +76,7 @@ class D3D12CommandProcessor final : public CommandProcessor {
 
   void ClearCaches() override;
   void InvalidateGpuMemory() override;
+  void ClearReadbackBuffers() override;
 
   void InitializeShaderStorage(
       const std::filesystem::path& cache_root, uint32_t title_id, bool blocking,
@@ -381,6 +385,48 @@ class D3D12CommandProcessor final : public CommandProcessor {
   void DestroyResolveHoldSnapshotBuffer(ResolveHoldSnapshotBuffer& buffer);
   // Deletion is deferred here, so nothing has to be drained up front.
   void PrepareResolveHoldSnapshotEviction() {}
+
+  // Staging storage for command_processor_readback_staging.inc, which owns the
+  // pool itself. Used only without the guest RAM host buffer.
+  struct ReadbackStagingBuffer {
+    Microsoft::WRL::ComPtr<ID3D12Resource> resource;
+    void* mapped = nullptr;
+  };
+  bool CreateReadbackStagingBuffer(ReadbackStagingBuffer& buffer,
+                                   uint32_t size);
+  void DestroyReadbackStagingBuffer(ReadbackStagingBuffer& buffer);
+  void PrepareReadbackStagingEviction() {}
+  bool AwaitReadbackStagingSubmission(uint64_t submission);
+  // Readback heaps are host-coherent, so a completed copy is already visible.
+  void InvalidateReadbackStaging(const ReadbackStagingBuffer&) {}
+  // The staging pool, shared with the Vulkan backend. Included here rather than
+  // with the other fragments because the declarations below name its
+  // ReadbackStagingSlot.
+#include "../command_processor_readback_staging.inc"
+  ReadbackStagingSlot* StageReadbackFromBuffer(ID3D12Resource* source_buffer,
+                                               uint32_t source_offset,
+                                               uint32_t address,
+                                               uint32_t length);
+  void FinishPendingResolveStaging();
+  // A resolve's staging copy waiting for IssueCopy to close its marker scope
+  // and copy it out. Zero length means none, deferred takes the previous copy.
+  struct PendingResolveStaging {
+    uint64_t key = 0;
+    uint32_t address = 0;
+    uint32_t length = 0;
+    bool deferred = false;
+  };
+  PendingResolveStaging pending_resolve_staging_;
+  void StageMemexportReadback();
+  void FlushMemexportStagingReadback();
+  // Export ranges staged but not yet copied out, in record order - a later
+  // copy of an overlapping range has to win.
+  struct MemexportStagedRange {
+    uint64_t key;
+    uint32_t address;
+    uint32_t length;
+  };
+  std::vector<MemexportStagedRange> memexport_staged_;
 
   void InitializeTrace() override;
 
