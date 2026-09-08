@@ -31,7 +31,6 @@
 #include "xenia/gpu/d3d12/d3d12_render_target_cache.h"
 #include "xenia/gpu/draw_util.h"
 #include "xenia/gpu/gpu_flags.h"
-#include "xenia/gpu/pipeline_util.h"
 #include "xenia/gpu/registers.h"
 #include "xenia/gpu/spirv_builtin_geometry_shader.h"
 #include "xenia/gpu/spirv_shader.h"
@@ -215,6 +214,22 @@ void PipelineCache::Shutdown() {
   }
   deferred_destroy_pipelines_.clear();
 
+  // The creation threads are joined without draining the queue, so drop what is
+  // left before the entries it points at are deleted below.
+  while (!creation_queue_.empty()) {
+    creation_queue_.pop();
+  }
+  // Nothing can be parked for publishing any more either - release whatever was
+  // still held back.
+  for (auto& parked : publish_parked_) {
+    if (parked.second.second) {
+      parked.second.second->Release();
+    }
+  }
+  publish_parked_.clear();
+  publish_cursor_ = 1;
+  publish_seq_next_ = 1;
+
   // Destroy all pipelines.
   current_pipeline_ = nullptr;
   for (auto it : pipelines_) {
@@ -393,18 +408,9 @@ void PipelineCache::InitializeShaderStorage(
           continue;
         }
         Pipeline* new_pipeline = new Pipeline;
+        new_pipeline->from_storage = true;
         std::memcpy(&new_pipeline->description, &mesa_runtime_description,
                     sizeof(mesa_runtime_description));
-        if (mesa_pixel_shader) {
-          uint32_t bound_rts =
-              (pipeline_description.render_targets[0].used ? 1 : 0) |
-              (pipeline_description.render_targets[1].used ? 2 : 0) |
-              (pipeline_description.render_targets[2].used ? 4 : 0) |
-              (pipeline_description.render_targets[3].used ? 8 : 0);
-          new_pipeline->priority = pipeline_util::CalculatePipelinePriority(
-              bound_rts, mesa_pixel_shader->writes_color_targets(),
-              mesa_pixel_shader->writes_depth());
-        }
         pipelines_.emplace(pipeline_stored_description.description_hash,
                            new_pipeline);
         COUNT_profile_set("gpu/pipeline_cache/pipelines", pipelines_.size());
@@ -1413,7 +1419,8 @@ bool PipelineCache::ConfigurePipeline(
   }
 
   if (current_pipeline_ != nullptr &&
-      current_pipeline_->description.description == description) {
+      current_pipeline_->description.description == description &&
+      !current_pipeline_->wants_rebuild()) {
     *pipeline_handle_out = current_pipeline_;
     *root_signature_out = current_pipeline_->description.root_signature;
     return true;
@@ -1421,10 +1428,17 @@ bool PipelineCache::ConfigurePipeline(
 
   // Find an existing pipeline in the cache.
   uint64_t hash = XXH3_64bits(&description, sizeof(description));
+  // A warm-up entry whose creation failed is rebuilt below instead of returned.
+  // Only this thread touches the map, so creation threads can flag but not act.
+  Pipeline* rebuild_pipeline = nullptr;
   auto found_range = pipelines_.equal_range(hash);
   for (auto it = found_range.first; it != found_range.second; ++it) {
     Pipeline* found_pipeline = it->second;
     if (found_pipeline->description.description == description) {
+      if (found_pipeline->wants_rebuild()) {
+        rebuild_pipeline = found_pipeline;
+        break;
+      }
       current_pipeline_ = found_pipeline;
       *pipeline_handle_out = found_pipeline;
       *root_signature_out = found_pipeline->description.root_signature;
@@ -1432,11 +1446,22 @@ bool PipelineCache::ConfigurePipeline(
     }
   }
 
-  Pipeline* new_pipeline = new Pipeline;
+  Pipeline* new_pipeline = rebuild_pipeline;
+  if (new_pipeline) {
+    // Already keyed under this hash. The description built above replaces the
+    // one whose DXIL never arrived, so the rebuild uses live state.
+    XELOGW("Rebuilding pipeline that failed to create (VS {:016X}, PS {:016X})",
+           vertex_shader->shader().ucode_data_hash(),
+           pixel_shader ? pixel_shader->shader().ucode_data_hash() : 0);
+    // A live build from here on, so a second failure is final.
+    new_pipeline->from_storage = false;
+  } else {
+    new_pipeline = new Pipeline;
+    pipelines_.emplace(hash, new_pipeline);
+    COUNT_profile_set("gpu/pipeline_cache/pipelines", pipelines_.size());
+  }
   std::memcpy(&new_pipeline->description, &runtime_description,
               sizeof(runtime_description));
-  pipelines_.emplace(hash, new_pipeline);
-  COUNT_profile_set("gpu/pipeline_cache/pipelines", pipelines_.size());
 
   if (use_async) {
     // Queue for background thread. A real-VS placeholder has its VS translated
@@ -1445,14 +1470,6 @@ bool PipelineCache::ConfigurePipeline(
     new_pipeline->pending_vertex_shader =
         (use_placeholder && !defer_both) ? nullptr : vertex_shader;
     new_pipeline->pending_pixel_shader = pixel_shader;
-    // Calculate priority based on whether shader writes to visible RTs.
-    if (pixel_shader) {
-      uint32_t bound_rts = pipeline_util::GetBoundRTMaskFromNormalizedColorMask(
-          normalized_color_mask);
-      new_pipeline->priority = pipeline_util::CalculatePipelinePriority(
-          bound_rts, pixel_shader->shader().writes_color_targets(),
-          pixel_shader->shader().writes_depth());
-    }
     // The skip case (defer_without_placeholder) intentionally creates no
     // placeholder - state stays null and the draw is dropped until ready.
     if (use_placeholder && !defer_without_placeholder) {
@@ -1483,6 +1500,8 @@ bool PipelineCache::ConfigurePipeline(
     }
     {
       std::lock_guard<xe_mutex> lock(creation_request_lock_);
+      // Queued and numbered together, so the publish order matches draw order.
+      new_pipeline->publish_seq = publish_seq_next_++;
       creation_queue_.push(new_pipeline);
     }
     creation_request_cond_.notify_one();
@@ -1494,7 +1513,8 @@ bool PipelineCache::ConfigurePipeline(
 
   // Mesa pipelines persist too: their SPIR-V modifications are stored so the
   // reload can rebuild the DXIL (translated at the then-current resolution).
-  if (storage_writer_.is_active()) {
+  // A rebuilt entry came from storage, so writing it again would duplicate it.
+  if (storage_writer_.is_active() && !rebuild_pipeline) {
     pipeline_storage_file_flush_needed_ = true;
     PipelineStoredDescription stored_description;
     stored_description.description_hash = hash;
@@ -2534,7 +2554,7 @@ void PipelineCache::CreationThread(size_t thread_index) {
       // until the pipeline is created - other threads must be able to dequeue
       // requests, but can't set the completion event until the pipelines are
       // fully created (rather than just started creating).
-      pipeline_to_create = creation_queue_.top();
+      pipeline_to_create = creation_queue_.front();
       creation_queue_.pop();
       ++creation_threads_busy_;
     }
@@ -2548,35 +2568,7 @@ void PipelineCache::CreationThread(size_t thread_index) {
     ID3D12PipelineState* new_state =
         CreateD3D12Pipeline(pipeline_to_create->description);
 
-    if (new_state != nullptr) {
-      // Swap in the real pipeline. If a placeholder was in use, defer its
-      // destruction until the GPU has passed the submissions that may reference
-      // it. Without a placeholder the old value is null and this is a plain
-      // store.
-      ID3D12PipelineState* old_state = pipeline_to_create->state.exchange(
-          new_state, std::memory_order_acq_rel);
-      pipeline_to_create->is_placeholder.store(false,
-                                               std::memory_order_release);
-      if (old_state != nullptr) {
-        std::lock_guard<std::mutex> lock(deferred_destroy_mutex_);
-        deferred_destroy_pipelines_.emplace_back(
-            old_state, command_processor_.GetCurrentSubmission());
-      }
-    } else {
-      // Real creation failed. Keep any placeholder in use, but stop reporting
-      // it as a placeholder so occlusion-query awaits do not block forever.
-      pipeline_to_create->is_placeholder.store(false,
-                                               std::memory_order_release);
-      XELOGE("Pipeline creation failed (VS {:016X}, PS {:016X})",
-             pipeline_to_create->description.vertex_shader
-                 ? pipeline_to_create->description.vertex_shader->shader()
-                       .ucode_data_hash()
-                 : 0,
-             pipeline_to_create->description.pixel_shader
-                 ? pipeline_to_create->description.pixel_shader->shader()
-                       .ucode_data_hash()
-                 : 0);
-    }
+    PublishCreatedPipeline(pipeline_to_create, new_state);
 
     // Pipeline created - the thread is not busy anymore, safe to set the
     // completion event if needed (at the next iteration, or in some other
@@ -2597,7 +2589,7 @@ void PipelineCache::CreateQueuedPipelinesOnProcessorThread() {
       if (creation_queue_.empty()) {
         break;
       }
-      pipeline_to_create = creation_queue_.top();
+      pipeline_to_create = creation_queue_.front();
       creation_queue_.pop();
     }
 
@@ -2610,13 +2602,67 @@ void PipelineCache::CreateQueuedPipelinesOnProcessorThread() {
     ID3D12PipelineState* new_state =
         CreateD3D12Pipeline(pipeline_to_create->description);
 
-    // Store the pipeline. If creation failed, state stays nullptr.
-    if (new_state != nullptr) {
-      pipeline_to_create->state.store(new_state, std::memory_order_release);
-    } else {
-      XELOGW("ProcessorThread: Pipeline creation failed");
+    PublishCreatedPipeline(pipeline_to_create, new_state);
+  }
+}
+
+void PipelineCache::PublishCreatedPipeline(Pipeline* pipeline,
+                                           ID3D12PipelineState* state) {
+  if (!pipeline->publish_seq) {
+    // Storage warm-up: nothing is drawing these yet, so ordering them would
+    // only delay them.
+    StoreCreatedPipeline(pipeline, state);
+    return;
+  }
+  // Park it and take over whatever run of publishes this completes. The stores
+  // run outside the lock - one of them may take deferred_destroy_mutex_.
+  std::vector<std::pair<Pipeline*, ID3D12PipelineState*>> to_publish;
+  {
+    std::lock_guard<std::mutex> lock(publish_lock_);
+    publish_parked_.emplace(pipeline->publish_seq,
+                            std::make_pair(pipeline, state));
+    auto it = publish_parked_.begin();
+    while (it != publish_parked_.end() && it->first == publish_cursor_) {
+      to_publish.push_back(std::move(it->second));
+      it = publish_parked_.erase(it);
+      ++publish_cursor_;
     }
   }
+  for (auto& publish : to_publish) {
+    StoreCreatedPipeline(publish.first, publish.second);
+  }
+}
+
+void PipelineCache::StoreCreatedPipeline(Pipeline* pipeline,
+                                         ID3D12PipelineState* state) {
+  if (state != nullptr) {
+    // Swap in the real pipeline. If a placeholder was in use, defer its
+    // destruction until the GPU has passed the submissions that may reference
+    // it. Without a placeholder the old value is null and this is a plain
+    // store.
+    ID3D12PipelineState* old_state =
+        pipeline->state.exchange(state, std::memory_order_acq_rel);
+    pipeline->is_placeholder.store(false, std::memory_order_release);
+    if (old_state != nullptr) {
+      std::lock_guard<std::mutex> lock(deferred_destroy_mutex_);
+      deferred_destroy_pipelines_.emplace_back(
+          old_state, command_processor_.GetCurrentSubmission());
+    }
+    return;
+  }
+  // Real creation failed. Keep any placeholder in use, but stop reporting it as
+  // a placeholder so occlusion-query awaits do not block forever.
+  pipeline->is_placeholder.store(false, std::memory_order_release);
+  XELOGE("Pipeline creation failed (VS {:016X}, PS {:016X})",
+         pipeline->description.vertex_shader
+             ? pipeline->description.vertex_shader->shader().ucode_data_hash()
+             : 0,
+         pipeline->description.pixel_shader
+             ? pipeline->description.pixel_shader->shader().ucode_data_hash()
+             : 0);
+  // After the log: this is what wants_rebuild() waits on, and the rebuild
+  // overwrites the description the log just read.
+  pipeline->creation_failed.store(true, std::memory_order_release);
 }
 
 }  // namespace d3d12

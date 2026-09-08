@@ -18,6 +18,7 @@
 #include <deque>
 #include <filesystem>
 #include <functional>
+#include <map>
 #include <memory>
 #include <mutex>
 #include <queue>
@@ -341,17 +342,11 @@ class VulkanPipelineCache : public GuestSpirvShaderCache::Host {
     VkRenderPass render_pass;
     // For dynamic rendering (VK_KHR_dynamic_rendering / Vulkan 1.3).
     VulkanRenderTargetCache::RenderPassKey render_pass_key;
-    // Priority for async compilation (higher = compiled sooner).
-    // Pipelines that write to visible render targets get higher priority.
-    uint8_t priority = 0;
-  };
-
-  // Comparator for priority queue - higher priority first.
-  struct PipelineCreationPriorityCompare {
-    bool operator()(const PipelineCreationArguments& a,
-                    const PipelineCreationArguments& b) const {
-      return a.priority < b.priority;  // max-heap: lower priority at bottom
-    }
+    // Publish order among live pipelines, 1-based. A finished pipeline is only
+    // swapped in once every earlier one has been, so a pass never samples a
+    // producer still drawing with its placeholder. 0 for warm-up entries, which
+    // publish as soon as they are built.
+    uint32_t publish_seq = 0;
   };
 
   // Can be called from multiple threads. use_try_claim atomically claims the
@@ -418,10 +413,22 @@ class VulkanPipelineCache : public GuestSpirvShaderCache::Host {
   // vertex_shader_override, if not VK_NULL_HANDLE, is used instead of the
   // translated vertex shader module (for the ucode interpreter placeholder,
   // whose guest VS is intentionally not translated yet).
+  // If out_unpublished_pipeline is given, the pipeline is returned through it
+  // instead of swapped into the entry, for a caller that publishes it later.
+  // Set on every path, VK_NULL_HANDLE when there is nothing new to publish.
   bool EnsurePipelineCreated(
       const PipelineCreationArguments& creation_arguments,
       VkShaderModule fragment_shader_override = VK_NULL_HANDLE,
-      VkShaderModule vertex_shader_override = VK_NULL_HANDLE);
+      VkShaderModule vertex_shader_override = VK_NULL_HANDLE,
+      VkPipeline* out_unpublished_pipeline = nullptr);
+
+  // Swaps a freshly created pipeline (or a creation failure, null) into its
+  // entry, holding live pipelines back until their turn.
+  void PublishCreatedPipeline(
+      const PipelineCreationArguments& creation_arguments, VkPipeline pipeline);
+  // The unordered store PublishCreatedPipeline defers to.
+  void StoreCreatedPipeline(const PipelineCreationArguments& creation_arguments,
+                            VkPipeline pipeline, bool creating_placeholder);
 
   // Creates a placeholder pipeline using the placeholder pixel shader.
   // Used for pipeline hot-swap to reduce stutter.
@@ -537,16 +544,23 @@ class VulkanPipelineCache : public GuestSpirvShaderCache::Host {
   std::vector<std::unique_ptr<xe::threading::Thread>> creation_threads_;
   std::atomic<bool> creation_threads_shutdown_{false};
   std::atomic<size_t> creation_threads_busy_{0};
-  // Priority queue contains pointers to map entries. Pipelines are never
-  // evicted as games have a finite set that should all remain cached for
-  // performance. Higher priority pipelines (those writing to visible RTs)
-  // are compiled first.
-  std::priority_queue<PipelineCreationArguments,
-                      std::vector<PipelineCreationArguments>,
-                      PipelineCreationPriorityCompare>
-      creation_queue_;
+  // Contains pointers to map entries. Pipelines are never evicted as games have
+  // a finite set that should all remain cached for performance. FIFO, so they
+  // build in the order the game first drew them.
+  std::queue<PipelineCreationArguments> creation_queue_;
   std::mutex creation_request_lock_;
   std::condition_variable creation_request_cond_;
+  // Next publish_seq to hand out. Protected with creation_request_lock_, so it
+  // is assigned in the same order the pipelines are queued.
+  uint32_t publish_seq_next_ = 1;
+  // Reorder buffer for live pipelines: publish_cursor_ is the seq whose turn it
+  // is, publish_parked_ holds ones that finished early. A parked entry always
+  // has an earlier one queued or in flight, so the completion event's "queue
+  // empty and nobody busy" test still means everything is published.
+  std::mutex publish_lock_;
+  uint32_t publish_cursor_ = 1;
+  std::map<uint32_t, std::pair<PipelineCreationArguments, VkPipeline>>
+      publish_parked_;
   std::unique_ptr<xe::threading::Event> creation_completion_event_ = nullptr;
   std::atomic<bool> creation_completion_set_event_{false};
   std::function<void()> creation_completion_callback_;

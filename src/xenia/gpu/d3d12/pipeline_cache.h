@@ -15,6 +15,7 @@
 #include <cstdio>
 #include <deque>
 #include <functional>
+#include <map>
 #include <memory>
 #include <mutex>
 #include <queue>
@@ -409,8 +410,8 @@ class PipelineCache : public GuestSpirvShaderCache::Host {
                           uint64_t data_hash);
 
   // Analyzes shaders in parallel for storage loading. D3D12 renders only
-  // through spirv_to_dxil, so only the ucode analysis is needed here, which
-  // the pipeline recreation reads for priority.
+  // through spirv_to_dxil, so only the ucode analysis is needed here, ahead of
+  // the translations the creation threads run.
   void AnalyzeShadersForStorage(
       const std::set<std::pair<uint64_t, uint64_t>>& translations_needed);
 
@@ -530,15 +531,24 @@ class PipelineCache : public GuestSpirvShaderCache::Host {
     // pipeline. Set to nullptr after translation is done.
     Shader::Translation* pending_vertex_shader{nullptr};
     Shader::Translation* pending_pixel_shader{nullptr};
-    // Priority for async compilation (higher = compiled sooner).
-    // Pipelines that write to visible render targets get higher priority.
-    uint8_t priority{0};
-  };
+    // Built speculatively by the storage warm-up, not by a draw. Cleared on
+    // rebuild, which is what limits it to one attempt. A live pipeline that
+    // fails is a real failure and is never retried.
+    bool from_storage{false};
+    // Set by a creation thread when real creation failed. A warm-up build that
+    // ran before its shaders finished translating has no DXIL to create from,
+    // and the entry would otherwise skip its draws for the rest of the session.
+    std::atomic<bool> creation_failed{false};
 
-  // Comparator for priority queue - higher priority first.
-  struct PipelineCreationPriorityCompare {
-    bool operator()(const Pipeline* a, const Pipeline* b) const {
-      return a->priority < b->priority;  // max-heap: lower priority at bottom
+    // Publish order among live pipelines, 1-based. A finished pipeline is only
+    // swapped in once every earlier one has been, so a pass never samples a
+    // producer still drawing with its placeholder. 0 for warm-up entries, which
+    // publish as soon as they are built.
+    uint32_t publish_seq{0};
+
+    // Whether the next draw should rebuild this entry from live state.
+    bool wants_rebuild() const {
+      return from_storage && creation_failed.load(std::memory_order_acquire);
     }
   };
 
@@ -574,15 +584,28 @@ class PipelineCache : public GuestSpirvShaderCache::Host {
   // Pipeline creation threads.
   void CreationThread(size_t thread_index);
   void CreateQueuedPipelinesOnProcessorThread();
+  // Swaps a freshly created pipeline (or a creation failure, |state| null) into
+  // its entry, holding live pipelines back until their turn.
+  void PublishCreatedPipeline(Pipeline* pipeline, ID3D12PipelineState* state);
+  // The unordered store PublishCreatedPipeline defers to.
+  void StoreCreatedPipeline(Pipeline* pipeline, ID3D12PipelineState* state);
   xe_mutex creation_request_lock_;
   std::condition_variable_any creation_request_cond_;
-  // Priority queue contains pointers to map entries. Pipelines are never
-  // evicted as games have a finite set that should all remain cached for
-  // performance. Higher priority pipelines (those writing to visible RTs)
-  // are compiled first.
-  std::priority_queue<Pipeline*, std::vector<Pipeline*>,
-                      PipelineCreationPriorityCompare>
-      creation_queue_;
+  // Contains pointers to map entries. Pipelines are never evicted as games have
+  // a finite set that should all remain cached for performance. FIFO, so they
+  // build in the order the game first drew them.
+  std::queue<Pipeline*> creation_queue_;
+  // Next publish_seq to hand out. Protected with creation_request_lock_, so it
+  // is assigned in the same order the pipelines are queued.
+  uint32_t publish_seq_next_ = 1;
+  // Reorder buffer for live pipelines: publish_cursor_ is the seq whose turn it
+  // is, publish_parked_ holds ones that finished early. A parked entry always
+  // has an earlier one queued or in flight, so the completion event's "queue
+  // empty and nobody busy" test still means everything is published.
+  std::mutex publish_lock_;
+  uint32_t publish_cursor_ = 1;
+  std::map<uint32_t, std::pair<Pipeline*, ID3D12PipelineState*>>
+      publish_parked_;
   // Number of threads that are currently creating a pipeline - incremented when
   // a pipeline is dequeued (the completion event can't be triggered before this
   // is zero). Protected with creation_request_lock_.

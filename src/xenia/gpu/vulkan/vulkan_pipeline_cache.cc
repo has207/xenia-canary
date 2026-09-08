@@ -24,7 +24,6 @@
 #include "xenia/base/xxhash.h"
 #include "xenia/gpu/draw_util.h"
 #include "xenia/gpu/gpu_flags.h"
-#include "xenia/gpu/pipeline_util.h"
 #include "xenia/gpu/register_file.h"
 #include "xenia/gpu/registers.h"
 #include "xenia/gpu/spirv_builder.h"
@@ -357,6 +356,22 @@ void VulkanPipelineCache::Shutdown() {
     }
     deferred_destroy_pipelines_.clear();
   }
+
+  // The creation threads are joined without draining the queue, so drop what is
+  // left before the entries it refers to are destroyed below.
+  while (!creation_queue_.empty()) {
+    creation_queue_.pop();
+  }
+  // Nothing can be parked for publishing any more either - destroy whatever was
+  // still held back.
+  for (const auto& parked : publish_parked_) {
+    if (parked.second.second != VK_NULL_HANDLE) {
+      dfn.vkDestroyPipeline(device, parked.second.second, nullptr);
+    }
+  }
+  publish_parked_.clear();
+  publish_cursor_ = 1;
+  publish_seq_next_ = 1;
 
   // Destroy all pipelines.
   last_pipeline_ = nullptr;
@@ -738,14 +753,6 @@ bool VulkanPipelineCache::ConfigurePipeline(
     }
 
     // Queue the real pipeline creation in the background.
-    uint8_t priority = 0;
-    if (pixel_shader) {
-      uint32_t bound_rts = pipeline_util::GetBoundRTMaskFromNormalizedColorMask(
-          normalized_color_mask);
-      priority = pipeline_util::CalculatePipelinePriority(
-          bound_rts, pixel_shader->shader().writes_color_targets(),
-          pixel_shader->shader().writes_depth());
-    }
     {
       std::lock_guard<std::mutex> lock(creation_request_lock_);
       PipelineCreationArguments creation_arguments;
@@ -759,7 +766,8 @@ bool VulkanPipelineCache::ConfigurePipeline(
           tessellation_control_shader;
       creation_arguments.render_pass = render_pass;
       creation_arguments.render_pass_key = render_pass_key;
-      creation_arguments.priority = priority;
+      // Queued and numbered together, so the publish order matches draw order.
+      creation_arguments.publish_seq = publish_seq_next_++;
       creation_queue_.push(creation_arguments);
     }
     creation_request_cond_.notify_one();
@@ -886,11 +894,12 @@ void VulkanPipelineCache::CreationThread() {
       if (creation_threads_shutdown_) {
         break;
       }
-      creation_arguments = creation_queue_.top();
+      creation_arguments = creation_queue_.front();
       creation_queue_.pop();
       ++creation_threads_busy_;
     }
 
+    VkPipeline created_pipeline = VK_NULL_HANDLE;
     if (!EnsureShadersTranslated(creation_arguments.vertex_shader,
                                  creation_arguments.pixel_shader,
                                  worker_translator.get())) {
@@ -908,20 +917,14 @@ void VulkanPipelineCache::CreationThread() {
         creation_arguments.pipeline->second.pipeline_layout.store(
             real_layout, std::memory_order_release);
       }
-      if (!EnsurePipelineCreated(creation_arguments)) {
+      if (!EnsurePipelineCreated(creation_arguments, VK_NULL_HANDLE,
+                                 VK_NULL_HANDLE, &created_pipeline)) {
         XELOGE("Failed to create Vulkan pipeline");
       }
     }
-    // On failure: if a placeholder exists it will remain in use permanently.
-    // Clear the flag so we're not in a misleading "waiting for real" state.
-    if (creation_arguments.pipeline->second.is_placeholder.load(
-            std::memory_order_acquire)) {
-      XELOGW(
-          "Real pipeline creation failed - placeholder will remain in use "
-          "(may cause visual artifacts)");
-      creation_arguments.pipeline->second.is_placeholder.store(
-          false, std::memory_order_release);
-    }
+    // Runs even with nothing created: the reorder buffer has to advance past a
+    // failure, or every later pipeline waits on it forever.
+    PublishCreatedPipeline(creation_arguments, created_pipeline);
 
     {
       std::unique_lock<std::mutex> lock(creation_request_lock_);
@@ -1674,7 +1677,12 @@ bool VulkanPipelineCache::EnsurePipelineCreatedWithInterpreterPlaceholder(
 bool VulkanPipelineCache::EnsurePipelineCreated(
     const PipelineCreationArguments& creation_arguments,
     VkShaderModule fragment_shader_override,
-    VkShaderModule vertex_shader_override) {
+    VkShaderModule vertex_shader_override,
+    VkPipeline* out_unpublished_pipeline) {
+  if (out_unpublished_pipeline) {
+    // Defined on every path below, including the early returns.
+    *out_unpublished_pipeline = VK_NULL_HANDLE;
+  }
   // Check if we already have a pipeline.
   // If it's a placeholder and we're not creating another placeholder,
   // we need to replace it with the real pipeline.
@@ -2293,6 +2301,59 @@ bool VulkanPipelineCache::EnsurePipelineCreated(
     return false;
   }
 
+  if (out_unpublished_pipeline) {
+    // The caller publishes it, in its turn.
+    *out_unpublished_pipeline = pipeline;
+    return true;
+  }
+  StoreCreatedPipeline(creation_arguments, pipeline, creating_placeholder);
+  return true;
+}
+
+void VulkanPipelineCache::PublishCreatedPipeline(
+    const PipelineCreationArguments& creation_arguments, VkPipeline pipeline) {
+  if (!creation_arguments.publish_seq) {
+    // Storage warm-up: nothing is drawing these yet, so ordering them would
+    // only delay them.
+    StoreCreatedPipeline(creation_arguments, pipeline, false);
+    return;
+  }
+  // Park it and take over whatever run of publishes this completes. The stores
+  // run outside the lock - one of them may take deferred_destroy_mutex_.
+  std::vector<std::pair<PipelineCreationArguments, VkPipeline>> to_publish;
+  {
+    std::lock_guard<std::mutex> lock(publish_lock_);
+    publish_parked_.emplace(creation_arguments.publish_seq,
+                            std::make_pair(creation_arguments, pipeline));
+    auto it = publish_parked_.begin();
+    while (it != publish_parked_.end() && it->first == publish_cursor_) {
+      to_publish.push_back(std::move(it->second));
+      it = publish_parked_.erase(it);
+      ++publish_cursor_;
+    }
+  }
+  for (auto& publish : to_publish) {
+    StoreCreatedPipeline(publish.first, publish.second, false);
+  }
+}
+
+void VulkanPipelineCache::StoreCreatedPipeline(
+    const PipelineCreationArguments& creation_arguments, VkPipeline pipeline,
+    bool creating_placeholder) {
+  if (pipeline == VK_NULL_HANDLE) {
+    // Creation failed. If a placeholder exists it will remain in use
+    // permanently - clear the flag so we're not in a misleading "waiting for
+    // real" state.
+    if (creation_arguments.pipeline->second.is_placeholder.load(
+            std::memory_order_acquire)) {
+      XELOGW(
+          "Real pipeline creation failed - placeholder will remain in use "
+          "(may cause visual artifacts)");
+      creation_arguments.pipeline->second.is_placeholder.store(
+          false, std::memory_order_release);
+    }
+    return;
+  }
   // Record the placeholder handle before publishing it, so a draw that observes
   // this pipeline handle also observes it as the placeholder (see Pipeline::
   // placeholder_pipeline). Stored before the exchange so the release on the
@@ -2329,8 +2390,6 @@ bool VulkanPipelineCache::EnsurePipelineCreated(
                ? creation_arguments.pixel_shader->shader().ucode_data_hash()
                : 0);
   }
-
-  return true;
 }
 
 void VulkanPipelineCache::ProcessDeferredDestructions() {
@@ -2635,22 +2694,6 @@ void VulkanPipelineCache::InitializeShaderStorage(
 
       // Queue for creation.
       if (!creation_threads_.empty()) {
-        // Calculate priority based on whether shader writes to visible RTs.
-        uint8_t priority = 0;
-        if (pixel_shader) {
-          uint32_t bound_rts =
-              (pipeline_description.render_targets[0].color_write_mask ? 1
-                                                                       : 0) |
-              (pipeline_description.render_targets[1].color_write_mask ? 2
-                                                                       : 0) |
-              (pipeline_description.render_targets[2].color_write_mask ? 4
-                                                                       : 0) |
-              (pipeline_description.render_targets[3].color_write_mask ? 8 : 0);
-          priority = pipeline_util::CalculatePipelinePriority(
-              bound_rts, pixel_shader->writes_color_targets(),
-              pixel_shader->writes_depth());
-        }
-
         std::lock_guard<std::mutex> lock(creation_request_lock_);
         PipelineCreationArguments creation_arguments;
         creation_arguments.pipeline = &pipeline_pair;
@@ -2664,7 +2707,6 @@ void VulkanPipelineCache::InitializeShaderStorage(
         creation_arguments.render_pass = render_pass;
         creation_arguments.render_pass_key =
             pipeline_description.render_pass_key;
-        creation_arguments.priority = priority;
         creation_queue_.push(creation_arguments);
         creation_request_cond_.notify_one();
       } else {
