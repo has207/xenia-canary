@@ -419,11 +419,20 @@ class VulkanPipelineCache : public GuestSpirvShaderCache::Host {
   void StoreCreatedPipeline(const PipelineCreationArguments& creation_arguments,
                             VkPipeline pipeline, bool creating_placeholder);
 
+  // The pixel shader a placeholder pipeline rasterizes with. The no-op one
+  // draws nothing on the FSI path, where depth goes through the pixel shader.
+  VkShaderModule GetPlaceholderFragmentShader(
+      const PipelineCreationArguments& creation_arguments,
+      bool allow_debug_color) const;
+
   // Creates a placeholder pipeline using the placeholder pixel shader.
   // Used for pipeline hot-swap to reduce stutter.
   bool EnsurePipelineCreatedWithPlaceholder(
       const PipelineCreationArguments& creation_arguments) {
-    return EnsurePipelineCreated(creation_arguments, placeholder_pixel_shader_);
+    return EnsurePipelineCreated(
+        creation_arguments,
+        GetPlaceholderFragmentShader(creation_arguments,
+                                     /*allow_debug_color=*/false));
   }
 
   // Creates a placeholder pipeline that rasterizes the guest geometry via the

@@ -1558,15 +1558,36 @@ VkShaderModule VulkanPipelineCache::GetTessellationVertexShader(
              : tessellation_indexed_vs_;
 }
 
+VkShaderModule VulkanPipelineCache::GetPlaceholderFragmentShader(
+    const PipelineCreationArguments& creation_arguments,
+    bool allow_debug_color) const {
+  if (render_target_cache_.GetPath() ==
+      RenderTargetCache::Path::kPixelShaderInterlock) {
+    // Depth goes through the pixel shader here, so write it like a depth-only
+    // draw rather than drawing nothing.
+    VkShaderModule depth_only_fragment_shader =
+        depth_only_fragment_shaders_[size_t(
+            creation_arguments.pipeline->first.render_pass_key.msaa_samples)];
+    if (depth_only_fragment_shader != VK_NULL_HANDLE) {
+      return depth_only_fragment_shader;
+    }
+    // Not null - creating_placeholder is derived from this being non-null.
+    return placeholder_pixel_shader_;
+  }
+  if (allow_debug_color && cvars::async_shader_vs_interpreter_debug_color &&
+      placeholder_color_pixel_shader_ != VK_NULL_HANDLE) {
+    return placeholder_color_pixel_shader_;
+  }
+  return placeholder_pixel_shader_;
+}
+
 bool VulkanPipelineCache::EnsurePipelineCreatedWithInterpreterPlaceholder(
     const PipelineCreationArguments& creation_arguments) {
-  VkShaderModule placeholder_ps =
-      (cvars::async_shader_vs_interpreter_debug_color &&
-       placeholder_color_pixel_shader_ != VK_NULL_HANDLE)
-          ? placeholder_color_pixel_shader_
-          : placeholder_pixel_shader_;
-  return EnsurePipelineCreated(creation_arguments, placeholder_ps,
-                               ucode_interpreter_vs_);
+  return EnsurePipelineCreated(
+      creation_arguments,
+      GetPlaceholderFragmentShader(creation_arguments,
+                                   /*allow_debug_color=*/true),
+      ucode_interpreter_vs_);
 }
 
 bool VulkanPipelineCache::EnsurePipelineCreated(

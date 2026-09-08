@@ -2069,13 +2069,30 @@ ID3D12PipelineState* PipelineCache::CreateD3D12Pipeline(
   }
 
   // Pixel shader.
+  // Writes EDRAM depth/stencil and no color. The no-op is only a fallback for
+  // a ROV depth-only shader that could not be generated.
+  auto use_rov_depth_only_pixel_shader = [&]() {
+    const std::vector<uint8_t>& mesa_depth_only_rov_pixel_shader =
+        mesa_depth_only_rov_pixel_shaders_[size_t(
+            description.guest_msaa_samples)];
+    if (!mesa_depth_only_rov_pixel_shader.empty()) {
+      state_desc.PS.pShaderBytecode = mesa_depth_only_rov_pixel_shader.data();
+      state_desc.PS.BytecodeLength = mesa_depth_only_rov_pixel_shader.size();
+    } else {
+      state_desc.PS.pShaderBytecode = shaders::placeholder_ps;
+      state_desc.PS.BytecodeLength = sizeof(shaders::placeholder_ps);
+    }
+  };
   if (as_placeholder) {
-    // Hot-swap placeholder: the real pixel shader is not translated yet, so use
-    // the no-op placeholder (no color output, leaves render targets untouched).
-    // Interpreter placeholders may instead use the flat-grey debug shader so
-    // the interim geometry is visible (host render target path only).
-    if (as_interpreter && cvars::async_shader_vs_interpreter_debug_color &&
-        !edram_rov_used) {
+    // Hot-swap placeholder: the real pixel shader is not translated yet, so
+    // rasterize without writing color. The flat-grey debug shader may stand in
+    // on the host render target path to make the interim geometry visible.
+    if (edram_rov_used) {
+      // Color and depth both go through the pixel shader here, so the no-op
+      // would draw nothing at all. Write depth like a depth-only draw.
+      use_rov_depth_only_pixel_shader();
+    } else if (as_interpreter &&
+               cvars::async_shader_vs_interpreter_debug_color) {
       state_desc.PS.pShaderBytecode = shaders::placeholder_color_ps;
       state_desc.PS.BytecodeLength = sizeof(shaders::placeholder_color_ps);
     } else {
@@ -2097,18 +2114,8 @@ ID3D12PipelineState* PipelineCache::CreateD3D12Pipeline(
       return nullptr;
     }
   } else if (edram_rov_used) {
-    // Real ROV depth-only shader (writes EDRAM depth/stencil). The no-op
-    // placeholder_ps is only a fallback if generation failed.
-    const std::vector<uint8_t>& mesa_depth_only_rov_pixel_shader =
-        mesa_depth_only_rov_pixel_shaders_[size_t(
-            description.guest_msaa_samples)];
-    if (!mesa_depth_only_rov_pixel_shader.empty()) {
-      state_desc.PS.pShaderBytecode = mesa_depth_only_rov_pixel_shader.data();
-      state_desc.PS.BytecodeLength = mesa_depth_only_rov_pixel_shader.size();
-    } else {
-      state_desc.PS.pShaderBytecode = shaders::placeholder_ps;
-      state_desc.PS.BytecodeLength = sizeof(shaders::placeholder_ps);
-    }
+    // Guest depth-only draw on the ROV path.
+    use_rov_depth_only_pixel_shader();
   } else {
     if (render_target_cache_.depth_float24_convert_in_pixel_shader() &&
         (description.depth_func != xenos::CompareFunction::kAlways ||

@@ -3476,7 +3476,6 @@ bool VulkanCommandProcessor::IssueDraw(xenos::PrimitiveType prim_type,
   VulkanShader::VulkanTranslation* vertex_shader_translation;
   VulkanShader::VulkanTranslation* pixel_shader_translation;
   bool use_interpreter = false;
-  bool drop_until_ready = false;
   uint32_t normalized_color_mask;
   reg::RB_DEPTHCONTROL normalized_depth_control;
   draw_util::HostDepthPolygonOffset host_depth_polygon_offset;
@@ -3587,6 +3586,8 @@ bool VulkanCommandProcessor::IssueDraw(xenos::PrimitiveType prim_type,
     // placeholder either). These are the draws async_shader_skip_draws governs.
     // Interpreter-eligible draws and draws whose VS is already translated
     // always have a placeholder and never translate on the draw thread.
+    // Only decides whether to translate here. Whether the draw can render is
+    // read off the pipeline itself, which may have gained a placeholder since.
     bool no_placeholder = async_available && !use_interpreter &&
                           !vertex_shader_translation->is_translated();
     // The draw thread translates only for a no-placeholder draw that isn't
@@ -3599,7 +3600,6 @@ bool VulkanCommandProcessor::IssueDraw(xenos::PrimitiveType prim_type,
         return false;
       }
     }
-    drop_until_ready = no_placeholder && cvars::async_shader_skip_draws;
 
     // Obtain the samplers. Note that the bindings don't depend on the shader
     // modification, so if on the second iteration of this loop it becomes
@@ -3704,25 +3704,13 @@ bool VulkanCommandProcessor::IssueDraw(xenos::PrimitiveType prim_type,
     return false;
   }
 
-  if (drop_until_ready) {
-    // Non-interpretable draw whose shaders weren't translated yet - it has been
-    // queued for background creation; skip drawing it until the real pipeline
-    // is ready (a later frame renders it). Never translate/compile on the draw
-    // thread for these.
-    XELOGI(
-        "Draw skipped (no interpreter placeholder, real pipeline not ready): "
-        "VS {:016X}, PS {:016X}",
-        vertex_shader->ucode_data_hash(),
-        pixel_shader ? pixel_shader->ucode_data_hash() : 0);
-    return true;
-  }
   // If async mode is active, this may be a placeholder pipeline. The real
   // pipeline will be swapped in by the creation thread when ready.
   VkPipeline current_pipeline =
       pipeline->pipeline.load(std::memory_order_acquire);
   if (current_pipeline == VK_NULL_HANDLE) {
-    // Real pipeline not created yet and no placeholder - skip this draw rather
-    // than stalling the draw thread waiting for the background.
+    // Nothing to draw with yet - no placeholder, real pipeline still building.
+    // Skip rather than stall, a later frame renders it.
     XELOGI("Draw skipped (pipeline not ready yet): VS {:016X}, PS {:016X}",
            vertex_shader->ucode_data_hash(),
            pixel_shader ? pixel_shader->ucode_data_hash() : 0);
