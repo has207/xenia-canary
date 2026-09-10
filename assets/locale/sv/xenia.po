@@ -23,7 +23,7 @@ msgstr ""
 
 #: src/xenia/ui/game_scan_progress_dialog_wx.cc:55
 msgid "   %zu already installed"
-msgstr "   %zu redan installerade"
+msgstr "   %zu redan installerat"
 
 #: src/xenia/ui/install_progress_dialog_wx.cc:185
 msgid " - %s (%08X)"
@@ -35,15 +35,15 @@ msgstr "%s (Plats %d)"
 
 #: src/xenia/ui/game_scan_progress_dialog_wx.cc:52
 msgid "%zu directories scanned   %zu files probed   %zu games found"
-msgstr "%zu kataloger genomsökta   %zu filer undersökta   %zu spel hittade"
+msgstr "%zu skannade mappar   %zu undersökta filer   %zu spel hittades"
 
 #: src/xenia/app/emulator_window.cc:895
 msgid "&About..."
-msgstr "&Om…"
+msgstr "&Om..."
 
 #: src/xenia/app/emulator_window.cc:794
 msgid "&Add Games..."
-msgstr "&Lägg till spel…"
+msgstr "&Lägg till spel..."
 
 #: src/xenia/app/emulator_window.cc:864
 msgid "&Audio"
@@ -59,7 +59,7 @@ msgstr "&Kontroller"
 
 #: src/xenia/app/emulator_window.cc:786
 msgid "&File"
-msgstr "&Fil"
+msgstr "&Arkiv"
 
 #: src/xenia/app/emulator_window.cc:884
 msgid "&Help"
@@ -67,15 +67,15 @@ msgstr "&Hjälp"
 
 #: src/xenia/app/emulator_window.cc:877
 msgid "&Install Content..."
-msgstr "&Installera innehåll…"
+msgstr "&Installera innehåll..."
 
 #: src/xenia/app/emulator_window.cc:826
 msgid "&Main"
-msgstr "All&mänt"
+msgstr "&Allmänt"
 
 #: src/xenia/app/emulator_window.cc:789
 msgid "&Open..."
-msgstr "&Öppna…"
+msgstr "&Öppna..."
 
 #: src/xenia/app/emulator_window.cc:816
 msgid "&Profile"
@@ -87,7 +87,7 @@ msgstr "&Stoppa spel"
 
 #: src/xenia/app/emulator_window.cc:874
 msgid "&Tools"
-msgstr "Verk&tyg"
+msgstr "&Verktyg"
 
 #: src/xenia/app/emulator_window.cc:853
 msgid "&View"
@@ -103,11 +103,11 @@ msgstr "(okänd titel)"
 
 #: src/xenia/ui/quick_settings_dialog_wx.cc:209
 msgid "50Hz"
-msgstr "50 Hz"
+msgstr "50Hz"
 
 #: src/xenia/ui/quick_settings_dialog_wx.cc:210
 msgid "60Hz"
-msgstr "60 Hz"
+msgstr "60Hz"
 
 #: src/xenia/ui/game_list_panel_wx.cc:304
 msgid "Achievements"
@@ -128,11 +128,11 @@ msgstr "Lägg till spel"
 
 #: src/xenia/ui/game_config_dialog_wx.cc:307
 msgid "Add..."
-msgstr "Lägg till…"
+msgstr "Lägg till..."
 
 #: src/xenia/ui/quick_settings_dialog_wx.cc:327
 msgid "Advanced..."
-msgstr "Avancerat…"
+msgstr "Avancerat..."
 
 #: src/xenia/ui/profile_editor_dialog_wx.cc:67
 msgid "Albania"
@@ -192,7 +192,7 @@ msgstr "Bahrain"
 
 #: src/xenia/ui/profile_editor_dialog_wx.cc:79
 msgid "Belarus"
-msgstr "Vitryssland"
+msgstr "Belarus"
 
 #: src/xenia/ui/profile_editor_dialog_wx.cc:73
 msgid "Belgium"
@@ -213,7 +213,7 @@ msgstr "Brasilien"
 #: src/xenia/ui/advanced_settings_dialog_wx.cc:306
 #: src/xenia/ui/game_config_dialog_wx.cc:98
 msgid "Browse..."
-msgstr "Bläddra…"
+msgstr "Bläddra..."
 
 #: src/xenia/ui/profile_editor_dialog_wx.cc:76
 msgid "Brunei Darussalam"
@@ -246,11 +246,11 @@ msgstr "Avbruten."
 #: src/xenia/ui/game_scan_progress_dialog_wx.cc:454
 #: src/xenia/ui/install_progress_dialog_wx.cc:244
 msgid "Cancelling..."
-msgstr "Avbryter…"
+msgstr "Avbryter..."
 
 #: src/xenia/ui/profile_editor_dialog_wx.cc:391
 msgid "Change Icon..."
-msgstr "Ändra ikon…"
+msgstr "Ändra ikon..."
 
 #: src/xenia/ui/profile_editor_dialog_wx.cc:84
 msgid "Chile"
@@ -281,7 +281,7 @@ msgstr "Kompatibilitet"
 
 #: src/xenia/ui/install_progress_dialog_wx.cc:221
 msgid "Complete"
-msgstr "Klart"
+msgstr "Slutfört"
 
 #: src/xenia/ui/advanced_settings_dialog_wx.cc:104
 #: src/xenia/ui/advanced_settings_dialog_wx.cc:419
@@ -302,7 +302,7 @@ msgstr "Costa Rica"
 
 #: src/xenia/ui/profile_editor_dialog_wx.cc:602
 msgid "Could not decode the selected image."
-msgstr "Kunde inte avkoda den valda bilden."
+msgstr "Den valda bilden Kunde ej avkodas."
 
 #: src/xenia/ui/profile_editor_dialog_wx.cc:470
 #: src/xenia/ui/quick_settings_dialog_wx.cc:317
@@ -311,7 +311,7 @@ msgstr "Land:"
 
 #: src/xenia/app/emulator_window.cc:2073
 msgid "Create new..."
-msgstr "Skapa ny…"
+msgstr "Skapa ny..."
 
 #: src/xenia/app/emulator_window.cc:2077 src/xenia/app/emulator_window.cc:2089
 #: src/xenia/app/emulator_window.cc:2214 src/xenia/app/emulator_window.cc:2221
@@ -348,15 +348,15 @@ msgstr "Skiva %zu"
 #: src/xenia/ui/advanced_settings_dialog_wx.cc:221
 #: src/xenia/ui/advanced_settings_dialog_wx.cc:534
 msgid "Discard Changes"
-msgstr "Förkasta ändringar"
+msgstr "Släng ändringar"
 
 #: src/xenia/ui/advanced_settings_dialog_wx.cc:534
 msgid "Discard all unsaved changes?"
-msgstr "Förkasta alla osparade ändringar?"
+msgstr "Släng alla osparade ändringar?"
 
 #: src/xenia/app/emulator_window.cc:2317
 msgid "Disconnect"
-msgstr "Koppla från"
+msgstr "Frånkoppla"
 
 #: src/xenia/ui/quick_settings_dialog_wx.cc:297
 msgid "Discord Rich Presence:"
@@ -376,7 +376,7 @@ msgstr "Ecuador"
 
 #: src/xenia/app/emulator_window.cc:2053
 msgid "Edit..."
-msgstr "Redigera…"
+msgstr "Redigera..."
 
 #: src/xenia/ui/profile_editor_dialog_wx.cc:95
 msgid "Egypt"
@@ -396,11 +396,11 @@ msgstr "Emulatorinställningar"
 
 #: src/xenia/ui/profile_editor_dialog_wx.cc:52
 msgid "English"
-msgstr "engelska"
+msgstr "Engelska"
 
 #: src/xenia/app/emulator_window.cc:2076 src/xenia/app/emulator_window.cc:2220
 msgid "Enter gamertag for new profile:"
-msgstr "Ange Gamertag för ny profil:"
+msgstr "Ange en Gamertag för den nya profilen:"
 
 #: src/xenia/ui/profile_editor_dialog_wx.cc:94
 msgid "Estonia"
@@ -408,7 +408,7 @@ msgstr "Estland"
 
 #: src/xenia/app/emulator_window.cc:887
 msgid "FA&Q..."
-msgstr "FA&Q…"
+msgstr "FA&Q..."
 
 #: src/xenia/ui/patches_dialog_wx.cc:225
 msgid "Failed to save changes."
@@ -429,7 +429,7 @@ msgstr "Trumset"
 
 #: src/xenia/ui/game_list_panel_wx.cc:1236
 msgid "File Corrupted"
-msgstr "Filen är skadad"
+msgstr "Korrupt fil"
 
 #: src/xenia/ui/game_list_panel_wx.cc:594
 msgid ""
@@ -449,7 +449,7 @@ msgstr "Finland"
 
 #: src/xenia/ui/quick_settings_dialog_wx.cc:199
 msgid "Framerate Limit (0 = unlimited):"
-msgstr "Bildfrekvensgräns (0 = obegränsad):"
+msgstr "Gräns för FPS (0 = obegränsad):"
 
 #: src/xenia/ui/profile_editor_dialog_wx.cc:99
 msgid "France"
@@ -457,7 +457,7 @@ msgstr "Frankrike"
 
 #: src/xenia/ui/profile_editor_dialog_wx.cc:55
 msgid "French"
-msgstr "franska"
+msgstr "Franska"
 
 #: src/xenia/ui/quick_settings_dialog_wx.cc:281
 msgid "Full"
@@ -473,7 +473,7 @@ msgstr "Flygspak"
 
 #: src/xenia/app/emulator_window.cc:891
 msgid "Game &compatibility..."
-msgstr "&Spelkompatibilitet…"
+msgstr "&Spelkompatibilitet..."
 
 #: src/xenia/ui/advanced_settings_dialog_wx.cc:277
 msgid "GameMode not in PATH; install to enable."
@@ -485,7 +485,7 @@ msgstr "Handkontroll"
 
 #: src/xenia/ui/game_list_panel_wx.cc:96
 msgid "Gameplay"
-msgstr "Spelbar"
+msgstr "Gameplay"
 
 #: src/xenia/ui/profile_editor_dialog_wx.cc:458
 msgid "Gamer Bio:"
@@ -525,7 +525,7 @@ msgstr "Georgien"
 
 #: src/xenia/ui/profile_editor_dialog_wx.cc:54
 msgid "German"
-msgstr "tyska"
+msgstr "Tyska"
 
 #: src/xenia/ui/profile_editor_dialog_wx.cc:89
 msgid "Germany"
@@ -541,7 +541,7 @@ msgstr "Grafik"
 
 #: src/xenia/ui/quick_settings_dialog_wx.cc:163
 msgid "Graphics Backend:"
-msgstr "Grafikbakände:"
+msgstr "Grafik-backend:"
 
 #: src/xenia/ui/profile_editor_dialog_wx.cc:100
 msgid "Great Britain"
@@ -581,7 +581,7 @@ msgstr "Island"
 
 #: src/xenia/ui/profile_editor_dialog_wx.cc:396
 msgid "Icon change is disabled while a title is running."
-msgstr "Ändring av ikon är inaktiverad medan en titel körs."
+msgstr "Ikonändring är avaktiverat medan en titel körs."
 
 #: src/xenia/ui/game_scan_progress_dialog_wx.cc:198
 msgid "Import"
@@ -597,7 +597,7 @@ msgstr "Importen misslyckades"
 
 #: src/xenia/ui/quick_settings_dialog_wx.cc:305
 msgid "In-Process Title Relaunch:"
-msgstr "Återstart av titel i processen:"
+msgstr "In-Process Title Relaunch:"
 
 #: src/xenia/ui/profile_editor_dialog_wx.cc:111
 msgid "India"
@@ -650,7 +650,7 @@ msgstr "Israel"
 
 #: src/xenia/ui/profile_editor_dialog_wx.cc:57
 msgid "Italian"
-msgstr "italienska"
+msgstr "Italienska"
 
 #: src/xenia/ui/profile_editor_dialog_wx.cc:115
 msgid "Italy"
@@ -666,7 +666,7 @@ msgstr "Japan"
 
 #: src/xenia/ui/profile_editor_dialog_wx.cc:53
 msgid "Japanese"
-msgstr "japanska"
+msgstr "Japanska"
 
 #: src/xenia/ui/profile_editor_dialog_wx.cc:117
 msgid "Jordan"
@@ -686,7 +686,7 @@ msgstr "Korea"
 
 #: src/xenia/ui/profile_editor_dialog_wx.cc:58
 msgid "Korean"
-msgstr "koreanska"
+msgstr "Koreanska"
 
 #: src/xenia/ui/profile_editor_dialog_wx.cc:122
 msgid "Kuwait"
@@ -748,11 +748,11 @@ msgstr "Live aktiverat"
 
 #: src/xenia/ui/game_scan_progress_dialog_wx.cc:182
 msgid "Loading titles..."
-msgstr "Läser in titlar…"
+msgstr "Läser in titlar..."
 
 #: src/xenia/ui/game_list_panel_wx.cc:98
 msgid "Loads"
-msgstr "Läser in"
+msgstr "Laddningar"
 
 #: src/xenia/app/emulator_window.cc:2003
 msgid "Login"
@@ -788,7 +788,7 @@ msgid ""
 "settings need a relaunch to take effect."
 msgstr ""
 "Hantera emulatorkonfiguration. Ändringar sparas i config.toml; vissa "
-"inställningar kräver omstart för att börja gälla."
+"inställningar kräver en omstart för att verkställas."
 
 #: src/xenia/ui/advanced_settings_dialog_wx.cc:273
 msgid "MangoHUD not in PATH; install to enable."
@@ -821,7 +821,7 @@ msgstr "Marocko"
 #: src/xenia/app/emulator_window.cc:1146
 #: src/xenia/app/emulator_window.cc:2823
 msgid "Mute"
-msgstr "Stäng av ljud"
+msgstr "Ljud av"
 
 #: src/xenia/ui/install_progress_dialog_wx.cc:172
 msgid "Name: %s"
@@ -849,7 +849,7 @@ msgstr "Inga profiler hittades"
 
 #: src/xenia/ui/game_list_panel_wx.cc:593
 msgid "No file path is set for this title."
-msgstr "Ingen filsökväg är angiven för denna titel."
+msgstr "Ingen filsökväg har angetts för denna titel."
 
 #: src/xenia/ui/game_scan_progress_dialog_wx.cc:376
 msgid "No games found."
@@ -895,7 +895,7 @@ msgstr "Onlinedomän:"
 
 #: src/xenia/ui/profile_editor_dialog_wx.cc:476
 msgid "Online Profile Settings"
-msgstr "Onlineprofilinställningar"
+msgstr "Onlineprofil-inställningar"
 
 #: src/xenia/ui/profile_editor_dialog_wx.cc:495
 msgid "Online XUID:"
@@ -923,7 +923,7 @@ msgstr "PNG-bilder (*.png)|*.png|Alla filer (*.*)|*.*"
 
 #: src/xenia/ui/profile_editor_dialog_wx.cc:402
 msgid "PNG, 64x64 or 32x32. Refresh after re-login."
-msgstr "PNG, 64x64 eller 32x32. Uppdatera efter återinloggning."
+msgstr "PNG, 64x64 eller 32x32. Uppdatera efter omloggning."
 
 #: src/xenia/ui/profile_editor_dialog_wx.cc:146
 msgid "Pakistan"
@@ -944,7 +944,7 @@ msgstr "Patch #%zu"
 #: src/xenia/ui/game_list_panel_wx.cc:1000
 #: src/xenia/ui/game_list_panel_wx.cc:1025
 msgid "Patches"
-msgstr "Patchar"
+msgstr "Patcher"
 
 #: src/xenia/ui/game_list_panel_wx.cc:692
 #: src/xenia/ui/game_list_panel_wx.cc:697
@@ -969,7 +969,7 @@ msgstr "Polen"
 
 #: src/xenia/ui/profile_editor_dialog_wx.cc:62
 msgid "Polish"
-msgstr "polska"
+msgstr "Polska"
 
 #: src/xenia/ui/profile_editor_dialog_wx.cc:149
 msgid "Portugal"
@@ -977,7 +977,7 @@ msgstr "Portugal"
 
 #: src/xenia/ui/profile_editor_dialog_wx.cc:60
 msgid "Portuguese"
-msgstr "portugisiska"
+msgstr "Portugisiska"
 
 #: src/xenia/ui/profile_editor_dialog_wx.cc:184
 msgid "Pro"
@@ -993,11 +993,11 @@ msgstr "Profilinställningar"
 
 #: src/xenia/ui/profile_editor_dialog_wx.cc:608
 msgid "Profile icon must be 64x64 or 32x32. Selected image is %dx%d."
-msgstr "Profilikonen måste vara 64x64 eller 32x32. Vald bild är %dx%d."
+msgstr "Profilikonen måste vara 64x64 eller 32x32. Den valda bilden är %dx%d."
 
 #: src/xenia/ui/profile_editor_dialog_wx.cc:399
 msgid "Profile must be signed in to change the icon."
-msgstr "Profilen måste vara inloggad för att ändra ikonen."
+msgstr "Profilen måste vara inloggad för att kunna ändra ikon."
 
 #: src/xenia/ui/game_scan_progress_dialog_wx.cc:94
 msgid "Publisher: %s"
@@ -1053,11 +1053,11 @@ msgstr "Rendering:"
 #: src/xenia/ui/advanced_settings_dialog_wx.cc:481
 #: src/xenia/ui/quick_settings_dialog_wx.cc:584
 msgid "Reset all settings to their default values?"
-msgstr "Återställ alla inställningar till sina standardvärden?"
+msgstr "Återställ alla inställningar till standardvärden?"
 
 #: src/xenia/ui/quick_settings_dialog_wx.cc:329
 msgid "Reset to Default"
-msgstr "Återställ till standard"
+msgstr "Återställ till standardvärden"
 
 #: src/xenia/ui/advanced_settings_dialog_wx.cc:224
 #: src/xenia/ui/advanced_settings_dialog_wx.cc:482
@@ -1075,7 +1075,7 @@ msgstr "Rumänien"
 
 #: src/xenia/ui/profile_editor_dialog_wx.cc:63
 msgid "Russian"
-msgstr "ryska"
+msgstr "Ryska"
 
 #: src/xenia/ui/profile_editor_dialog_wx.cc:153
 msgid "Russian Federation"
@@ -1097,7 +1097,7 @@ msgstr "Spara ändringar"
 
 #: src/xenia/ui/patches_dialog_wx.cc:236
 msgid "Saved. Takes effect on next launch."
-msgstr "Sparat. Träder i kraft vid nästa start."
+msgstr "Sparat. Börjar gälla vid nästa start."
 
 #: src/xenia/ui/game_list_panel_wx.cc:981
 msgid "Saves"
@@ -1105,20 +1105,20 @@ msgstr "Sparfiler"
 
 #: src/xenia/ui/game_scan_progress_dialog_wx.cc:120
 msgid "Scan for Games"
-msgstr "Sök efter spel"
+msgstr "Skanna efter spel"
 
 #: src/xenia/ui/game_scan_progress_dialog_wx.cc:45
 msgid "Scanning: %s"
-msgstr "Söker: %s"
+msgstr "Skannar: %s"
 
 #: src/xenia/ui/game_list_panel_wx.cc:457
 msgid "Search %zu games..."
-msgstr "Sök bland %zu spel…"
+msgstr "Sök bland %zu spel..."
 
 #: src/xenia/ui/game_list_panel_wx.cc:248
 #: src/xenia/ui/game_list_panel_wx.cc:453
 msgid "Search games..."
-msgstr "Sök spel…"
+msgstr "Sök spel..."
 
 #: src/xenia/ui/advanced_settings_dialog_wx.cc:313
 #: src/xenia/ui/advanced_settings_dialog_wx.cc:323
@@ -1137,7 +1137,7 @@ msgstr "Välj PNG-bild"
 #: src/xenia/ui/advanced_settings_dialog_wx.cc:332
 #: src/xenia/ui/game_config_dialog_wx.cc:117
 msgid "Select directory for %s"
-msgstr "Välj katalog för %s"
+msgstr "Välj mapp för %s"
 
 #: src/xenia/ui/profile_editor_dialog_wx.cc:593
 msgid "Selected file is not a valid PNG image."
@@ -1150,11 +1150,11 @@ msgstr "Inställningar"
 
 #: src/xenia/app/emulator_window.cc:856
 msgid "Show &Toolbar"
-msgstr "Visa verk&tygsfält"
+msgstr "Visa &verktygsfält"
 
 #: src/xenia/app/emulator_window.cc:805
 msgid "Show content directory..."
-msgstr "Visa innehållskatalog…"
+msgstr "Visa innehållsmapp..."
 
 #: src/xenia/ui/profile_editor_dialog_wx.cc:179
 msgid "Silver"
@@ -1162,7 +1162,7 @@ msgstr "Silver"
 
 #: src/xenia/ui/profile_editor_dialog_wx.cc:61
 msgid "Simplified Chinese"
-msgstr "förenklad kinesiska"
+msgstr "Förenklad kinesiska"
 
 #: src/xenia/ui/profile_editor_dialog_wx.cc:156
 msgid "Singapore"
@@ -1190,7 +1190,7 @@ msgstr "Spanien"
 
 #: src/xenia/ui/profile_editor_dialog_wx.cc:56
 msgid "Spanish"
-msgstr "spanska"
+msgstr "Spanska"
 
 #: src/xenia/ui/game_list_panel_wx.cc:301
 msgid "Status"
@@ -1206,18 +1206,18 @@ msgstr "Stoppa den körande titeln och återgå till listan"
 
 #: src/xenia/ui/profile_editor_dialog_wx.cc:520
 msgid "Subscription Tier:"
-msgstr "Prenumerationsnivå:"
+msgstr "Prenumeration:"
 
 #: src/xenia/ui/install_progress_dialog_wx.cc:219
 msgid "Successfully installed %d package(s)."
-msgstr "Installerade %d paket."
+msgstr "%d paket har installerats."
 
 #: src/xenia/ui/game_list_panel_wx.cc:608
 msgid ""
 "Supported Files|*;*.iso;*.xex;*.zar|Disc Image (*.iso)|*.iso|Disc Archive (*."
 "zar)|*.zar|Xbox Executable (*.xex)|*.xex|All Files (*.*)|*.*"
 msgstr ""
-"Filer som stöds|*;*.iso;*.xex;*.zar|Skivavbild (*.iso)|*.iso|Skivarkiv (*."
+"Filtyper som stöds|*;*.iso;*.xex;*.zar|Skivavbild (*.iso)|*.iso|Skivarkiv (*."
 "zar)|*.zar|Xbox-program (*.xex)|*.xex|Alla filer (*.*)|*.*"
 
 #: src/xenia/ui/profile_editor_dialog_wx.cc:155
@@ -1246,9 +1246,9 @@ msgid ""
 "\n"
 "Would you like to create one now?"
 msgstr ""
-"Det finns ingen profil tillgänglig. Du kan inte spara utan en profil.\n"
+"Ingen profil är tillgänglig. Du kan inte spara utan en profil.\n"
 "\n"
-"Vill du skapa en nu?"
+"Vill du skapa en profil nu?"
 
 #: src/xenia/ui/game_list_panel_wx.cc:303
 msgid "Title"
@@ -1260,11 +1260,11 @@ msgstr "Titeln hittades inte"
 
 #: src/xenia/ui/patches_dialog_wx.cc:155
 msgid "Toggles take effect on next launch."
-msgstr "Växlingar träder i kraft vid nästa start."
+msgstr "Ändringar verkställs vid nästa start."
 
 #: src/xenia/ui/profile_editor_dialog_wx.cc:59
 msgid "Traditional Chinese"
-msgstr "traditionell kinesiska"
+msgstr "Traditionell kinesiska"
 
 #: src/xenia/ui/profile_editor_dialog_wx.cc:165
 msgid "Trinidad And Tobago"
@@ -1308,11 +1308,11 @@ msgstr "Okänd"
 
 #: src/xenia/app/emulator_window.cc:2822
 msgid "Unmute"
-msgstr "Slå på ljud"
+msgstr "Ljud på"
 
 #: src/xenia/ui/game_list_panel_wx.cc:100
 msgid "Unplayable"
-msgstr "Inte spelbar"
+msgstr "Ospelbar"
 
 #: src/xenia/ui/quick_settings_dialog_wx.cc:341
 #: src/xenia/ui/quick_settings_dialog_wx.cc:619
@@ -1365,7 +1365,7 @@ msgid ""
 "\n"
 "You can also do this later from File -> Add games."
 msgstr ""
-"Vill du lägga till spel nu?\n"
+"Vill du lägga till några spel nu?\n"
 "\n"
 "Du kan också göra detta senare från Arkiv -> Lägg till spel."
 
@@ -1374,7 +1374,7 @@ msgid ""
 "Xenia is not fully initialized yet. Try again after the app finishes "
 "starting up."
 msgstr ""
-"Xenia är inte fullt initierat ännu. Försök igen när appen har startat klart."
+"Xenia har inte helt initialiserats ännu. Försök igen när appen har startat klart."
 
 #: src/xenia/app/emulator_window.cc:329
 msgid "Wheel"
@@ -1386,12 +1386,12 @@ msgstr "Jemen"
 
 #: src/xenia/ui/quick_settings_dialog_wx.cc:340
 msgid "You have unsaved changes. Discard them?"
-msgstr "Du har osparade ändringar. Förkasta dem?"
+msgstr "Du har osparade ändringar. Släng dem?"
 
 #: src/xenia/ui/quick_settings_dialog_wx.cc:617
 msgid "You have unsaved changes. Save them before opening advanced settings?"
 msgstr ""
-"Du har osparade ändringar. Spara dem innan avancerade inställningar öppnas?"
+"Du har osparade ändringar. Spara dem innan du öppnar de avancerade inställningarna?"
 
 #: src/xenia/ui/profile_editor_dialog_wx.cc:175
 msgid "Zimbabwe"
@@ -1412,15 +1412,15 @@ msgstr "titel %08X"
 
 #: src/xenia/ui/redist_installer_wx.cc:396
 msgid "dxil.dll not found, required for Direct3D 12 shaders. Download now (~26 MB)?"
-msgstr "dxil.dll hittades inte, krävs för Direct3D 12-shaders. Ladda ner nu (~26 MB)?"
+msgstr "dxil.dll hittades inte, vilket krävs för Direct3D 12-shaders. Ladda ner nu? (~26 MB)"
 
 #: src/xenia/ui/redist_installer_wx.cc:438
 msgid "D3D12Core.dll not found, required for Shader Model 6.6. Download now (~35 MB) and restart?"
-msgstr "D3D12Core.dll hittades inte, krävs för Shader Model 6.6. Ladda ner nu (~35 MB) och starta om?"
+msgstr "D3D12Core.dll hittades inte, vilket krävs för Shader Model 6.6. Ladda ner nu och starta om? (~35 MB)"
 
 #: src/xenia/ui/redist_installer_wx.cc:485
 msgid "D3D12SDKLayers.dll not found, required for the Direct3D 12 debug layer. Download now (~35 MB) and restart?"
-msgstr "D3D12SDKLayers.dll hittades inte, krävs för Direct3D 12-felsökningslagret. Ladda ner nu (~35 MB) och starta om?"
+msgstr "D3D12SDKLayers.dll hittades inte, vilket krävs för Direct3D 12-felsökning. Ladda ner nu och starta om? (~35 MB)"
 
 #: src/xenia/ui/redist_installer_wx.cc:358
 msgid "Download failed. Check your internet connection and try again."
@@ -1428,15 +1428,15 @@ msgstr "Nedladdningen misslyckades. Kontrollera din internetanslutning och förs
 
 #: src/xenia/ui/redist_installer_wx.cc:703
 msgid "The Microsoft Visual C++ runtime (%u.%u or newer) isn't installed. Download it from Microsoft now (~25 MB) and install?"
-msgstr "Microsoft Visual C++-körtiden (%u.%u eller nyare) är inte installerad. Ladda ner från Microsoft nu (~25 MB) och installera?"
+msgstr "Microsoft Visual C++ Runtime (%u.%u eller nyare) är inte installerad. Ladda ner från Microsoft nu och installera? (~25 MB)"
 
 #: src/xenia/ui/redist_installer_wx.cc:364
 msgid "The downloaded file failed integrity verification and was discarded."
-msgstr "Den nedladdade filen klarade inte integritetskontrollen och kasserades."
+msgstr "Den nedladdade filens integritetskontroll godkändes ej, och slängdes."
 
 #: src/xenia/ui/redist_installer_wx.cc:695
 msgid "The installed Microsoft Visual C++ runtime %u.%u.%u is older than the %u.%u this build of Xenia requires. Download the latest from Microsoft now (~25 MB) and install?"
-msgstr "Den installerade Microsoft Visual C++-körtiden %u.%u.%u är äldre än %u.%u som den här Xenia-versionen kräver. Ladda ner den senaste från Microsoft nu (~25 MB) och installera?"
+msgstr "Den installerade Microsoft Visual C++ Runtime %u.%u.%u är äldre än %u.%u som den här Xenia-versionen kräver. Ladda ner den senaste från Microsoft nu och installera? (~25 MB)"
 
 #: src/xenia/ui/redist_installer_wx.cc:369
 msgid "Failed to install the downloaded files."
@@ -1444,19 +1444,19 @@ msgstr "Det gick inte att installera de nedladdade filerna."
 
 #: src/xenia/ui/redist_installer_wx.cc:456
 msgid "Installed the DirectX 12 Agility SDK runtime, but couldn't restart automatically. Please restart Xenia."
-msgstr "DirectX 12 Agility SDK-körtid installerad, men automatisk omstart misslyckades. Starta om Xenia."
+msgstr "DirectX 12 Agility SDK Runtime har installerats, men den automatisk omstarten misslyckades. Starta om Xenia."
 
 #: src/xenia/ui/redist_installer_wx.cc:781
 msgid "Installed the Microsoft Visual C++ runtime, but couldn't restart automatically. Please restart Xenia."
-msgstr "Microsoft Visual C++-körtid installerad, men automatisk omstart misslyckades. Starta om Xenia."
+msgstr "Microsoft Visual C++ Runtime har installerats, men den automatisk omstarten misslyckades. Starta om Xenia."
 
 #: src/xenia/ui/redist_installer_wx.cc:503
 msgid "Installed the Direct3D 12 debug layer, but couldn't restart automatically. Please restart Xenia."
-msgstr "Direct3D 12-felsökningslager installerat, men automatisk omstart misslyckades. Starta om Xenia."
+msgstr "D3D12SDKLayers.dll har installerats, men den automatisk omstarten misslyckades. Starta om Xenia."
 
 #: src/xenia/ui/redist_installer_wx.cc:746
 msgid "vulkan-1.dll not found, required for the Vulkan graphics backend. Download now (~20 MB)?"
-msgstr "vulkan-1.dll hittades inte, krävs för Vulkan-grafikbackenden. Ladda ner nu (~20 MB)?"
+msgstr "vulkan-1.dll hittades inte, vilket krävs för Vulkan-grafikbackenden. Ladda ner nu? (~20 MB)"
 
 
 #: src/xenia/ui/game_info_panel_wx.cc:681
@@ -1497,9 +1497,9 @@ msgid ""
 "Commit: %s\n"
 "Build Date: %s"
 msgstr ""
-"Gren: %s\n"
+"Branch: %s\n"
 "Commit: %s\n"
-"Byggdatum: %s"
+"Build Date: %s"
 
 #: src/xenia/ui/game_info_panel_wx.cc:232
 msgid "Close the info pane"
@@ -1571,7 +1571,7 @@ msgstr "Ingen kompatibilitetsrapport är länkad."
 
 #: src/xenia/ui/game_info_panel_wx.cc:625
 msgid "No patches are bundled for this title."
-msgstr "Inga patchar medföljer den här titeln."
+msgstr "Inga patcher följer med i den här titeln."
 
 #: src/xenia/ui/game_info_panel_wx.cc:361
 msgid "No profile is signed in."
@@ -1583,7 +1583,7 @@ msgstr "Stöds inte på macOS"
 
 #: src/xenia/ui/game_info_panel_wx.cc:607
 msgid "Nothing installed."
-msgstr "Inget installerat."
+msgstr "Inget är installerat."
 
 #: src/xenia/ui/game_info_panel_wx.cc:757
 msgid "Open folder"
@@ -1627,7 +1627,7 @@ msgid ""
 "\n"
 "%s"
 msgstr ""
-"De här spelen hittades i mer än en utgåva, och varje utgåva har nu en egen post i listan. Sparfiler och uppdateringar hör till en enda utgåva och hålls därför åtskilda.\n"
+"De här spelen hittades i mer än en utgåva, och varje utgåva har nu en egen plats i listan. Sparfiler och uppdateringar hör till en enda utgåva och hålls därför åtskilda.\n"
 "\n"
 "%s"
 
@@ -1641,7 +1641,7 @@ msgstr "Titeluppdateringar (%zu)"
 
 #: src/xenia/app/emulator_window.cc:442
 msgid "UI font: %s (SIL Open Font License 1.1)"
-msgstr "Gränssnittstypsnitt: %s (SIL Open Font License 1.1)"
+msgstr "Typsnitt för gränssnitt: %s (SIL Open Font License 1.1)"
 
 #: src/xenia/ui/game_info_panel_wx.cc:399
 msgid "Unknown title"
