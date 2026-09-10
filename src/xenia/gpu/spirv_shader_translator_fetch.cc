@@ -1841,12 +1841,15 @@ void SpirvShaderTranslator::ProcessTextureFetchInstruction(
               builder_->makeFloatConstant(instr.attributes.lod_bias));
         }
 
-        // Cube auto-LOD without register gradients uses implicit LOD + bias to
-        // work around wrong-mip explicit cube gradients on Vulkan. Other dims
-        // keep explicit gradients, matching the DXBC ground-truth path.
-        bool use_lod_bias = use_computed_lod &&
-                            !instr.attributes.use_register_gradients &&
-                            instr.dimension == xenos::FetchOpDimension::kCube;
+        // Cube and 3D auto-LOD without register gradients use implicit LOD +
+        // bias. Explicit cube gradients pick the wrong mip on Vulkan, and
+        // explicit 3D gradients of a coordinate that is constant across the
+        // quad make NVIDIA return a different texel in one lane of the quad.
+        // 1D and 2D keep explicit gradients.
+        bool use_lod_bias =
+            use_computed_lod && !instr.attributes.use_register_gradients &&
+            (instr.dimension == xenos::FetchOpDimension::kCube ||
+             instr.dimension == xenos::FetchOpDimension::k3DOrStacked);
 
         if (use_lod_bias) {
           // The per-axis gradient exponent biases can't be applied to the
@@ -2086,7 +2089,7 @@ void SpirvShaderTranslator::ProcessTextureFetchInstruction(
           spv::Id sample_result_unsigned_3d, sample_result_signed_3d;
           {
             // 3D.
-            if (use_computed_lod) {
+            if (use_computed_lod && !use_lod_bias) {
               texture_parameters.gradX = gradients_h;
               texture_parameters.gradY = gradients_v;
             }
@@ -2105,7 +2108,7 @@ void SpirvShaderTranslator::ProcessTextureFetchInstruction(
           spv::Id sample_result_unsigned_stacked, sample_result_signed_stacked;
           {
             // 2D stacked.
-            if (use_computed_lod) {
+            if (use_computed_lod && !use_lod_bias) {
               // Extract 2D gradients for stacked textures which are 2D arrays.
               uint_vector_temp_.clear();
               uint_vector_temp_.push_back(0);
@@ -2129,7 +2132,7 @@ void SpirvShaderTranslator::ProcessTextureFetchInstruction(
             bool vol_min_filter_is_linear = instr.attributes.vol_min_filter ==
                                             xenos::TextureFilter::kLinear;
             spv::Id vol_filter_is_linear = spv::NoResult;
-            if (use_computed_lod &&
+            if (use_computed_lod && !use_lod_bias &&
                 (vol_mag_filter_is_fetch_const ||
                  vol_min_filter_is_fetch_const ||
                  vol_mag_filter_is_linear != vol_min_filter_is_linear)) {
