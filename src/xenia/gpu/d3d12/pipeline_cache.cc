@@ -1380,16 +1380,19 @@ bool PipelineCache::ConfigurePipeline(
           runtime_description, make_interpreter
                                    ? PipelinePlaceholderMode::kInterpreter
                                    : PipelinePlaceholderMode::kRealVertex);
+      // Published before state so a draw that loads the placeholder out of
+      // state always sees it here too, and pins this concrete PSO rather than
+      // the swappable handle - the real pipeline must never run against
+      // bindings built for the placeholder.
+      new_pipeline->placeholder_state.store(placeholder_state,
+                                            std::memory_order_release);
+      new_pipeline->uses_interpreter.store(
+          make_interpreter && placeholder_state != nullptr,
+          std::memory_order_release);
       new_pipeline->state.store(placeholder_state, std::memory_order_release);
       new_pipeline->is_placeholder.store(placeholder_state != nullptr,
                                          std::memory_order_release);
       if (make_interpreter && placeholder_state != nullptr) {
-        // The draw pins this concrete PSO and feeds interpreter constants; the
-        // real VS reads a different (packed) float layout, so it must not run
-        // against interpreter constants after a hot swap.
-        new_pipeline->placeholder_state.store(placeholder_state,
-                                              std::memory_order_release);
-        new_pipeline->uses_interpreter.store(true, std::memory_order_release);
         XELOGI(
             "VS interpreter placeholder created (interpreter VS + no-op PS): "
             "VS {:016X}, PS {:016X}",

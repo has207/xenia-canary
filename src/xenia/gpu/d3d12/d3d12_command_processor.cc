@@ -2784,8 +2784,9 @@ bool D3D12CommandProcessor::IssueDraw(xenos::PrimitiveType primitive_type,
   // (IM_LOAD_IMMEDIATE, address 0) shader can't be fed, so skip until the real
   // pipeline is ready rather than interpret from address 0.
   if (active_vertex_shader_ucode_address() == 0) {
+    bool is_placeholder = false;
     bool is_interpreter_placeholder = false;
-    pipeline_cache_->GetD3D12PipelineForDraw(pipeline_handle,
+    pipeline_cache_->GetD3D12PipelineForDraw(pipeline_handle, &is_placeholder,
                                              &is_interpreter_placeholder);
     if (is_interpreter_placeholder) {
       return true;
@@ -2812,15 +2813,19 @@ bool D3D12CommandProcessor::IssueDraw(xenos::PrimitiveType primitive_type,
   texture_cache_->RequestTextures(used_texture_mask);
 
   // Bind the pipeline after configuring it and doing everything that may bind
-  // other pipelines. For an interpreter placeholder, pin the concrete PSO
-  // instead of the swappable handle: the real VS reads a different (packed)
-  // float layout, so it must not run against the full-256 interpreter constants
-  // uploaded below if the real pipeline hot-swaps in before this is submitted.
+  // other pipelines. For a placeholder, pin the concrete PSO instead of the
+  // swappable handle: the handle is resolved again when the deferred command
+  // list is replayed, so a real pipeline hot-swapped in before the submission
+  // would run against the bindings uploaded below for the placeholder - an
+  // empty bindless index buffer for the still-translating pixel shader, and
+  // (interpreter) full-256 float constants in place of the packed layout the
+  // real vertex shader reads.
+  bool placeholder_pipeline = false;
   bool interpreter_placeholder = false;
   ID3D12PipelineState* draw_pipeline_state =
-      pipeline_cache_->GetD3D12PipelineForDraw(pipeline_handle,
-                                               &interpreter_placeholder);
-  if (interpreter_placeholder) {
+      pipeline_cache_->GetD3D12PipelineForDraw(
+          pipeline_handle, &placeholder_pipeline, &interpreter_placeholder);
+  if (placeholder_pipeline) {
     if (current_external_pipeline_ != draw_pipeline_state) {
       deferred_command_list_.D3DSetPipelineState(draw_pipeline_state);
       current_external_pipeline_ = draw_pipeline_state;

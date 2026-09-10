@@ -180,18 +180,26 @@ class PipelineCache : public GuestSpirvShaderCache::Host {
     return reinterpret_cast<const Pipeline*>(handle)->is_placeholder.load(
         std::memory_order_acquire);
   }
-  // Loads the current pipeline state once and reports whether it is the ucode
-  // interpreter placeholder. When it is, the draw must bind this concrete PSO
-  // (not the swappable handle) and feed interpreter constants, because the real
-  // VS reads a different (packed) float constant layout.
+  // Loads the current pipeline state once and reports whether it is a
+  // placeholder, and whether that placeholder is the ucode interpreter one.
+  // A placeholder draw must bind this concrete PSO instead of the swappable
+  // handle: the handle is resolved again when the deferred command list is
+  // replayed, so a real pipeline hot-swapped in meanwhile would run against
+  // bindings built for the placeholder - an empty bindless texture/sampler
+  // index buffer for the still-translating pixel shader, and (interpreter) the
+  // full-256 float constants the real VS doesn't use.
   ID3D12PipelineState* GetD3D12PipelineForDraw(
-      void* handle, bool* is_interpreter_placeholder_out) const {
+      void* handle, bool* is_placeholder_out,
+      bool* is_interpreter_placeholder_out) const {
     const Pipeline* pipeline = reinterpret_cast<const Pipeline*>(handle);
     ID3D12PipelineState* state =
         pipeline->state.load(std::memory_order_acquire);
-    *is_interpreter_placeholder_out =
+    bool is_placeholder =
         state != nullptr &&
-        state == pipeline->placeholder_state.load(std::memory_order_acquire) &&
+        state == pipeline->placeholder_state.load(std::memory_order_acquire);
+    *is_placeholder_out = is_placeholder;
+    *is_interpreter_placeholder_out =
+        is_placeholder &&
         pipeline->uses_interpreter.load(std::memory_order_acquire);
     return state;
   }
@@ -514,9 +522,8 @@ class PipelineCache : public GuestSpirvShaderCache::Host {
     // creation thread swaps in the real one.
     std::atomic<bool> is_placeholder{false};
     // True when the placeholder rasterizes with the ucode interpreter VS (so
-    // the draw must feed it full float constants + the ucode location, and pin
-    // the concrete placeholder PSO since the real VS reads a different constant
-    // layout). Only meaningful while is_placeholder.
+    // the draw must feed it full float constants + the ucode location). Only
+    // meaningful while is_placeholder.
     std::atomic<bool> uses_interpreter{false};
     // The placeholder PSO handle (nullptr if none). A draw loads state once and
     // compares it against this to know whether it is about to bind the
