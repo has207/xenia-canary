@@ -3926,6 +3926,16 @@ spv::Id SpirvShaderTranslator::GetStorageAddressingIndex(
         builder_->createBinOp(spv::OpIAdd, type_int_, index,
                               builder_->makeIntConstant(int(storage_index)));
   }
+  // a0 and aL are whatever the guest put there, so clamp to the array. Direct3D
+  // 12 binds the float constants as a root CBV, which carries no size to bound
+  // the read, unlike a Vulkan uniform buffer under robust buffer access.
+  uint32_t index_count =
+      is_float_constant ? constant_register_map.float_count : register_count();
+  if (index_count) {
+    index = builder_->createTriBuiltinCall(
+        type_int_, ext_inst_glsl_std_450_, GLSLstd450SClamp, index,
+        const_int_0_, builder_->makeIntConstant(int(index_count - 1)));
+  }
   return index;
 }
 
