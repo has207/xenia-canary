@@ -65,16 +65,26 @@ const std::string& D3D12Provider::GetAdapterDescription() const {
 
 void D3D12Provider::DumpDeviceRemovedData() const {
   ID3D12DeviceRemovedExtendedData* dred;
-  if (FAILED(device_->QueryInterface(IID_PPV_ARGS(&dred)))) {
+  HRESULT hr = device_->QueryInterface(IID_PPV_ARGS(&dred));
+  if (FAILED(hr)) {
+    XELOGW("DRED: not available on this device (HRESULT 0x{:08X})",
+           uint32_t(hr));
     return;
   }
-  bool any_data = false;
+  // Breadcrumbs and page-fault data are captured independently, so each is
+  // reported on its own - a missing half is itself a finding.
+  bool breadcrumbs_captured = false;
   // Breadcrumbs identify the last GPU operation that ran before the removal.
   D3D12_DRED_AUTO_BREADCRUMBS_OUTPUT breadcrumbs;
-  if (SUCCEEDED(dred->GetAutoBreadcrumbsOutput(&breadcrumbs))) {
+  hr = dred->GetAutoBreadcrumbsOutput(&breadcrumbs);
+  if (FAILED(hr)) {
+    XELOGW("DRED: breadcrumbs unavailable (HRESULT 0x{:08X})", uint32_t(hr));
+  } else {
+    uint32_t node_count = 0, unfinished_count = 0;
     for (const D3D12_AUTO_BREADCRUMB_NODE* node =
              breadcrumbs.pHeadAutoBreadcrumbNode;
          node; node = node->pNext) {
+      ++node_count;
       uint32_t op_count = node->BreadcrumbCount;
       uint32_t completed =
           node->pLastBreadcrumbValue ? *node->pLastBreadcrumbValue : 0;
@@ -82,7 +92,7 @@ void D3D12Provider::DumpDeviceRemovedData() const {
         // This command list finished, so it is not where the GPU stopped.
         continue;
       }
-      any_data = true;
+      ++unfinished_count;
       XELOGE(
           "DRED: command list '{}' on queue '{}' stopped after {} of {} ops, "
           "next op was {}",
@@ -92,17 +102,34 @@ void D3D12Provider::DumpDeviceRemovedData() const {
                                         : "<unnamed>",
           completed, op_count, uint32_t(node->pCommandHistory[completed]));
     }
+    breadcrumbs_captured = node_count != 0;
+    if (!node_count) {
+      XELOGW("DRED: the breadcrumb ring is empty - no command list recorded");
+    } else if (!unfinished_count) {
+      XELOGW(
+          "DRED: all {} recorded command lists completed - the fault is not "
+          "in a recorded operation",
+          node_count);
+    }
   }
   // Page-fault data names the allocation a bad GPU address belonged to.
+  bool page_fault_captured = false;
   D3D12_DRED_PAGE_FAULT_OUTPUT page_fault;
-  if (SUCCEEDED(dred->GetPageFaultAllocationOutput(&page_fault)) &&
-      page_fault.PageFaultVA) {
-    any_data = true;
+  hr = dred->GetPageFaultAllocationOutput(&page_fault);
+  if (FAILED(hr)) {
+    XELOGW("DRED: page-fault data unavailable (HRESULT 0x{:08X})",
+           uint32_t(hr));
+  } else if (!page_fault.PageFaultVA) {
+    XELOGW("DRED: the removal was not a GPU page fault");
+  } else {
+    page_fault_captured = true;
     XELOGE("DRED: GPU page fault at virtual address 0x{:016X}",
            uint64_t(page_fault.PageFaultVA));
+    uint32_t allocation_count = 0;
     for (const D3D12_DRED_ALLOCATION_NODE* node =
              page_fault.pHeadExistingAllocationNode;
          node; node = node->pNext) {
+      ++allocation_count;
       XELOGE("DRED:   live allocation '{}' (type {})",
              node->ObjectNameA ? node->ObjectNameA : "<unnamed>",
              uint32_t(node->AllocationType));
@@ -110,15 +137,19 @@ void D3D12Provider::DumpDeviceRemovedData() const {
     for (const D3D12_DRED_ALLOCATION_NODE* node =
              page_fault.pHeadRecentFreedAllocationNode;
          node; node = node->pNext) {
+      ++allocation_count;
       XELOGE("DRED:   recently freed allocation '{}' (type {})",
              node->ObjectNameA ? node->ObjectNameA : "<unnamed>",
              uint32_t(node->AllocationType));
     }
+    if (!allocation_count) {
+      XELOGE(
+          "DRED:   no tracked allocation - the address belongs to nothing we "
+          "own");
+    }
   }
-  if (!any_data) {
-    XELOGW(
-        "DRED: no device-removed data; restart with --d3d12_dred to capture "
-        "the faulting operation");
+  if (!breadcrumbs_captured && !page_fault_captured && !cvars::d3d12_dred) {
+    XELOGW("DRED: nothing captured; restart with --d3d12_dred");
   }
   dred->Release();
 }
@@ -296,19 +327,26 @@ bool D3D12Provider::Initialize() {
   bool debug = cvars::d3d12_debug;
   if (debug) {
     ID3D12Debug* debug_interface;
-    if (SUCCEEDED(
-            pfn_d3d12_get_debug_interface_(IID_PPV_ARGS(&debug_interface)))) {
+    HRESULT debug_interface_hr =
+        pfn_d3d12_get_debug_interface_(IID_PPV_ARGS(&debug_interface));
+    if (SUCCEEDED(debug_interface_hr)) {
       debug_interface->EnableDebugLayer();
       // GPU-based validation catches out-of-bounds shader resource access that
       // the CPU-side layer misses, but is very slow, so keep it opt-in.
       bool gpu_validation = false;
       if (cvars::d3d12_gpu_validation) {
         ID3D12Debug1* debug_interface1;
-        if (SUCCEEDED(debug_interface->QueryInterface(
-                IID_PPV_ARGS(&debug_interface1)))) {
+        HRESULT debug_interface1_hr =
+            debug_interface->QueryInterface(IID_PPV_ARGS(&debug_interface1));
+        if (SUCCEEDED(debug_interface1_hr)) {
           debug_interface1->SetEnableGPUBasedValidation(TRUE);
           debug_interface1->Release();
           gpu_validation = true;
+        } else {
+          XELOGW(
+              "GPU-based validation was requested but is unavailable, "
+              "continuing without it (HRESULT 0x{:08X})",
+              uint32_t(debug_interface1_hr));
         }
       }
       debug_interface->Release();
@@ -318,7 +356,8 @@ bool D3D12Provider::Initialize() {
       // The debug layer (D3D12SDKLayers.dll) isn't redistributable on its own.
       // Offer to fetch it from the Agility SDK and restart.
       EnsureDebugLayer(d3d12_dir);
-      XELOGW("Failed to enable the Direct3D 12 debug layer");
+      XELOGW("Failed to enable the Direct3D 12 debug layer (HRESULT 0x{:08X})",
+             uint32_t(debug_interface_hr));
       debug = false;
     }
   }
