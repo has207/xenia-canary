@@ -65,6 +65,10 @@ class GuestScheduler {
   // change. No-op if not queued.
   void RequeueForPriority(XThread* thread);
 
+  // Moves a ready thread to the CPU its guest affinity now names, which the
+  // dispatch loop only does once the old CPU dequeues it.
+  void MigrateForAffinity(XThread* thread);
+
   // Yields from a spin loop. On a fiber this hands the dispatch thread to the
   // next ready fiber, since a co-resident holder can only run if we yield.
   // Off the fiber path it yields (or briefly sleeps) the host thread.
