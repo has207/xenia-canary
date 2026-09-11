@@ -14,6 +14,7 @@
 #include <mutex>
 #include <string>
 
+#include "xenia/kernel/guest_scheduler.h"
 #include "xenia/kernel/xiocompletion.h"
 #include "xenia/vfs/device.h"
 #include "xenia/vfs/entry.h"
@@ -187,7 +188,10 @@ class XFile : public XObject {
  private:
   XFile();
 
-  // Bodies run on the I/O worker via RunBlockingHostCall. All take file_lock_
+  // Concurrency class this file's device allows for its offloaded calls.
+  GuestScheduler::BlockingCallClass io_call_class() const;
+
+  // Bodies run on an I/O worker via RunBlockingHostCall. All take file_lock_
   // themselves except ReadInternal, which runs under one its caller holds.
   X_STATUS ReadInternal(uint32_t buffer_guest_address, uint32_t buffer_length,
                         uint64_t byte_offset, uint32_t* out_bytes_read,

@@ -33,6 +33,8 @@ class DiscImageDevice : public Device {
   void Dump(StringBuffer* string_buffer) override;
   Entry* ResolvePath(const std::string_view path) override;
 
+  bool supports_concurrent_io() const override { return true; }
+
   const std::string& name() const override { return name_; }
   uint32_t attributes() const override { return 0; }
   uint32_t component_name_max_length() const override { return 255; }

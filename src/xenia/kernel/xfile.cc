@@ -36,6 +36,12 @@ XFile::~XFile() {
   file_->Destroy();
 }
 
+GuestScheduler::BlockingCallClass XFile::io_call_class() const {
+  return device()->supports_concurrent_io()
+             ? GuestScheduler::BlockingCallClass::kConcurrent
+             : GuestScheduler::BlockingCallClass::kSerial;
+}
+
 uint64_t XFile::position() const { return position_.load(); }
 
 void XFile::set_position(uint64_t value) { position_.store(value); }
@@ -43,11 +49,13 @@ void XFile::set_position(uint64_t value) { position_.store(value); }
 X_STATUS XFile::QueryDirectory(X_FILE_DIRECTORY_INFORMATION* out_info,
                                size_t length, const std::string_view file_name,
                                bool restart) {
-  // The I/O worker may already hold file_lock_ for a slow read.
+  // An I/O worker may already hold file_lock_ for a slow read.
   X_STATUS result = X_STATUS_SUCCESS;
-  kernel_state()->guest_scheduler()->RunBlockingHostCall([&]() {
-    result = QueryDirectoryInternal(out_info, length, file_name, restart);
-  });
+  kernel_state()->guest_scheduler()->RunBlockingHostCall(
+      [&]() {
+        result = QueryDirectoryInternal(out_info, length, file_name, restart);
+      },
+      io_call_class());
   return result;
 }
 
@@ -109,14 +117,16 @@ X_STATUS XFile::QueryDirectoryInternal(X_FILE_DIRECTORY_INFORMATION* out_info,
 X_STATUS XFile::Read(uint32_t buffer_guest_address, uint32_t buffer_length,
                      uint64_t byte_offset, uint32_t* out_bytes_read,
                      uint32_t apc_context, bool notify_completion) {
-  // file_lock_ is taken inside the closure, on the I/O worker, so it is never
+  // file_lock_ is taken inside the closure, on an I/O worker, so it is never
   // held while the calling fiber is parked.
   X_STATUS result = X_STATUS_SUCCESS;
-  kernel_state()->guest_scheduler()->RunBlockingHostCall([&]() {
-    std::lock_guard<std::mutex> lock(file_lock_);
-    result = ReadInternal(buffer_guest_address, buffer_length, byte_offset,
-                          out_bytes_read, apc_context, notify_completion);
-  });
+  kernel_state()->guest_scheduler()->RunBlockingHostCall(
+      [&]() {
+        std::lock_guard<std::mutex> lock(file_lock_);
+        result = ReadInternal(buffer_guest_address, buffer_length, byte_offset,
+                              out_bytes_read, apc_context, notify_completion);
+      },
+      io_call_class());
   return result;
 }
 
@@ -219,10 +229,12 @@ X_STATUS XFile::ReadScatter(uint32_t segments_guest_address, uint32_t length,
                             uint32_t apc_context) {
   // The whole loop as one unit, so the fiber parks once.
   X_STATUS result = X_STATUS_SUCCESS;
-  kernel_state()->guest_scheduler()->RunBlockingHostCall([&]() {
-    result = ReadScatterInternal(segments_guest_address, length, byte_offset,
-                                 out_bytes_read, apc_context);
-  });
+  kernel_state()->guest_scheduler()->RunBlockingHostCall(
+      [&]() {
+        result = ReadScatterInternal(segments_guest_address, length,
+                                     byte_offset, out_bytes_read, apc_context);
+      },
+      io_call_class());
   return result;
 }
 
@@ -289,10 +301,12 @@ X_STATUS XFile::Write(uint32_t buffer_guest_address, uint32_t buffer_length,
                       uint64_t byte_offset, uint32_t* out_bytes_written,
                       uint32_t apc_context) {
   X_STATUS result = X_STATUS_SUCCESS;
-  kernel_state()->guest_scheduler()->RunBlockingHostCall([&]() {
-    result = WriteInternal(buffer_guest_address, buffer_length, byte_offset,
-                           out_bytes_written, apc_context);
-  });
+  kernel_state()->guest_scheduler()->RunBlockingHostCall(
+      [&]() {
+        result = WriteInternal(buffer_guest_address, buffer_length, byte_offset,
+                               out_bytes_written, apc_context);
+      },
+      io_call_class());
   return result;
 }
 
@@ -332,10 +346,12 @@ X_STATUS XFile::WriteInternal(uint32_t buffer_guest_address,
 
 X_STATUS XFile::SetLength(size_t length) {
   X_STATUS result = X_STATUS_SUCCESS;
-  kernel_state()->guest_scheduler()->RunBlockingHostCall([&]() {
-    std::lock_guard<std::mutex> lock(file_lock_);
-    result = file_->SetLength(length);
-  });
+  kernel_state()->guest_scheduler()->RunBlockingHostCall(
+      [&]() {
+        std::lock_guard<std::mutex> lock(file_lock_);
+        result = file_->SetLength(length);
+      },
+      io_call_class());
   return result;
 }
 X_STATUS XFile::Rename(const std::filesystem::path file_path) {

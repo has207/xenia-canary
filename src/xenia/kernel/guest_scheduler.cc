@@ -51,6 +51,14 @@ namespace kernel {
 // non-dispatch thread. Set by each CPU's RunLoop.
 static thread_local int t_current_cpu = -1;
 
+// Raises |target| to |value| if larger. A racing stats reset drops one sample.
+static void AccumulateMax(std::atomic<uint64_t>& target, uint64_t value) {
+  uint64_t prev = target.load(std::memory_order_relaxed);
+  while (value > prev && !target.compare_exchange_weak(
+                             prev, value, std::memory_order_relaxed)) {
+  }
+}
+
 // Off a dispatch thread there is no CPU to index, so the caller must bail.
 static bool OnDispatchThread(const char* what) {
   if (t_current_cpu >= 0) {
@@ -295,6 +303,12 @@ void GuestScheduler::Shutdown() {
   if (io_event_) {
     io_event_->Set();
   }
+  {
+    // shutting_down_ is not set under this lock, so notify through it. A bare
+    // notify can land in the window before a worker parks.
+    std::lock_guard<std::mutex> lock(io_pool_lock_);
+    io_pool_cv_.notify_all();
+  }
   if (watchdog_event_) {
     watchdog_event_->Set();
   }
@@ -341,6 +355,10 @@ void GuestScheduler::Shutdown() {
     xe::threading::Wait(io_thread_.get(), false);
     io_thread_.reset();
   }
+  for (auto& thread : io_pool_threads_) {
+    xe::threading::Wait(thread.get(), false);
+  }
+  io_pool_threads_.clear();
   // Everything still linked is unreachable now that the dispatch threads are
   // gone. Reclaim each thread so a relaunch does not leak it and its stack.
   std::vector<XThread*> leftovers;
@@ -502,12 +520,7 @@ XThread* GuestScheduler::DequeueReady(int cpu_index) {
       uint64_t waited = Clock::host_tick_count_raw() - links.ready_since_tick;
       stats_.ready_wait_ticks.fetch_add(waited, std::memory_order_relaxed);
       stats_.ready_wait_count.fetch_add(1, std::memory_order_relaxed);
-      uint64_t prev =
-          stats_.ready_wait_max_ticks.load(std::memory_order_relaxed);
-      while (waited > prev &&
-             !stats_.ready_wait_max_ticks.compare_exchange_weak(
-                 prev, waited, std::memory_order_relaxed)) {
-      }
+      AccumulateMax(stats_.ready_wait_max_ticks, waited);
     }
     return picked;
   };
@@ -1054,16 +1067,20 @@ void GuestScheduler::WaitOnFence(xe::threading::Fence& fence) {
 }
 
 void GuestScheduler::RunBlockingHostCallOffloaded(
-    const std::function<void()>& fn) {
-  EnsureIoWorker();
+    const std::function<void()>& fn, BlockingCallClass call_class) {
   BlockingCall call;
   call.fn = &fn;
   call.queued_ns = Clock::host_tick_count_raw();
-  {
-    std::lock_guard<std::mutex> lock(io_lock_);
-    io_queue_.push(&call);
+  if (call_class == BlockingCallClass::kConcurrent) {
+    EnqueuePoolCall(&call);
+  } else {
+    EnsureIoWorker();
+    {
+      std::lock_guard<std::mutex> lock(io_lock_);
+      io_queue_.push(&call);
+    }
+    io_event_->Set();
   }
-  io_event_->Set();
   XThread* self = XThread::GetCurrentFiberThread();
   if (self) {
     self->set_cooperative_wait_shape(XThread::CooperativeWaitKind::kIoOffload,
@@ -1076,6 +1093,21 @@ void GuestScheduler::RunBlockingHostCallOffloaded(
   if (self) {
     self->clear_cooperative_wait_shape();
   }
+}
+
+void GuestScheduler::RunBlockingCall(BlockingCall* call) {
+  uint64_t started = Clock::host_tick_count_raw();
+  (*call->fn)();
+  uint64_t finished = Clock::host_tick_count_raw();
+  // Raw ticks, converted only at report time.
+  uint64_t queued_for = started - call->queued_ns;
+  stats_.io_calls.fetch_add(1, std::memory_order_relaxed);
+  stats_.io_queue_ns.fetch_add(queued_for, std::memory_order_relaxed);
+  stats_.io_run_ns.fetch_add(finished - started, std::memory_order_relaxed);
+  AccumulateMax(stats_.io_queue_max_ns, queued_for);
+  call->done.store(true, std::memory_order_release);
+  // Wake the parked caller instead of leaving it to the backoff timer.
+  WakeAll();
 }
 
 void GuestScheduler::IoWorkerLoop() {
@@ -1093,22 +1125,52 @@ void GuestScheduler::IoWorkerLoop() {
       xe::threading::Wait(io_event_.get(), false);
       continue;
     }
-    uint64_t started = Clock::host_tick_count_raw();
-    (*call->fn)();
-    uint64_t finished = Clock::host_tick_count_raw();
-    // Raw ticks, converted only at report time.
-    uint64_t queued_for = started - call->queued_ns;
-    stats_.io_calls.fetch_add(1, std::memory_order_relaxed);
-    stats_.io_queue_ns.fetch_add(queued_for, std::memory_order_relaxed);
-    stats_.io_run_ns.fetch_add(finished - started, std::memory_order_relaxed);
-    uint64_t prev_max = stats_.io_queue_max_ns.load(std::memory_order_relaxed);
-    while (queued_for > prev_max &&
-           !stats_.io_queue_max_ns.compare_exchange_weak(
-               prev_max, queued_for, std::memory_order_relaxed)) {
+    RunBlockingCall(call);
+  }
+}
+
+void GuestScheduler::StartPoolWorkerLocked() {
+  xe::threading::Thread::CreationParameters params;
+  auto thread =
+      xe::threading::Thread::Create(params, [this]() { IoPoolWorkerLoop(); });
+  thread->set_name(std::string("Guest I/O ") +
+                   std::to_string(io_pool_threads_.size()));
+  io_pool_threads_.push_back(std::move(thread));
+  io_pool_size_.store(io_pool_threads_.size(), std::memory_order_relaxed);
+  io_started_.store(true);
+}
+
+void GuestScheduler::EnqueuePoolCall(BlockingCall* call) {
+  {
+    std::lock_guard<std::mutex> lock(io_pool_lock_);
+    io_pool_queue_.push(call);
+    // Queued work counts as well as running work. In a burst every call can
+    // arrive before a worker has picked any up, and a busy count alone would
+    // see an idle pool and never grow it.
+    if (io_pool_busy_ + io_pool_queue_.size() > io_pool_threads_.size() &&
+        io_pool_threads_.size() < kMaxIoPoolThreads) {
+      StartPoolWorkerLocked();
     }
-    call->done.store(true, std::memory_order_release);
-    // Wake the parked caller instead of leaving it to the backoff timer.
-    WakeAll();
+  }
+  io_pool_cv_.notify_one();
+}
+
+void GuestScheduler::IoPoolWorkerLoop() {
+  Profiler::ThreadEnter("GuestScheduler IO Pool");
+  std::unique_lock<std::mutex> lock(io_pool_lock_);
+  while (!shutting_down_.load()) {
+    if (io_pool_queue_.empty()) {
+      io_pool_cv_.wait(lock);
+      continue;
+    }
+    BlockingCall* call = io_pool_queue_.front();
+    io_pool_queue_.pop();
+    ++io_pool_busy_;
+    AccumulateMax(stats_.io_peak_inflight, io_pool_busy_);
+    lock.unlock();
+    RunBlockingCall(call);
+    lock.lock();
+    --io_pool_busy_;
   }
 }
 
@@ -1598,6 +1660,7 @@ void GuestScheduler::ReportStatsIfDue() {
   uint64_t io_queue = take(stats_.io_queue_ns);
   uint64_t io_run = take(stats_.io_run_ns);
   uint64_t io_queue_max = take(stats_.io_queue_max_ns);
+  uint64_t io_peak = take(stats_.io_peak_inflight);
   double ticks_per_us = ticks_per_us_ > 0.0 ? ticks_per_us_ : 1.0;
   auto to_us = [ticks_per_us](uint64_t ticks) {
     return uint64_t(double(ticks) / ticks_per_us);
@@ -1607,11 +1670,12 @@ void GuestScheduler::ReportStatsIfDue() {
       "{}, forced preempts {}, yields down {} (starvation {}), background {} "
       "windows {} picks, ready wait avg "
       "{} us max {} us | io {} calls, queued avg {} us max {} us, ran avg "
-      "{} us",
+      "{} us, pool {} threads peak {} in flight",
       repolls, rereadied, idle_wakes, switches, forced, yield_downs, starved,
       bg_windows, bg_picks, rw_count ? to_us(rw_ticks / rw_count) : 0,
       to_us(rw_max), io_calls, io_calls ? to_us(io_queue / io_calls) : 0,
-      to_us(io_queue_max), io_calls ? to_us(io_run / io_calls) : 0);
+      to_us(io_queue_max), io_calls ? to_us(io_run / io_calls) : 0,
+      io_pool_size_.load(std::memory_order_relaxed), io_peak);
 }
 
 // Names what a fiber is parked on, for the no-progress dump.

@@ -33,6 +33,8 @@ class StfsContainerDevice : public XContentContainerDevice {
         ->content_metadata.volume_descriptor.stfs.flags.bits.read_only_format;
   }
 
+  bool supports_concurrent_io() const override { return true; }
+
   uint32_t component_name_max_length() const override { return 40; }
 
   uint32_t total_allocation_units() const override {

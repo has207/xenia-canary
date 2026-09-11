@@ -12,11 +12,13 @@
 
 #include <atomic>
 #include <chrono>
+#include <condition_variable>
 #include <functional>
 #include <memory>
 #include <mutex>
 #include <queue>
 #include <unordered_set>
+#include <vector>
 
 #include "xenia/base/threading.h"
 
@@ -86,18 +88,26 @@ class GuestScheduler {
   // which remains the backstop throughout.
   void WakeForSignal(const XObject* object);
 
+  // Whether an offloaded call may overlap the others. Set from the device, see
+  // vfs::Device::supports_concurrent_io.
+  enum class BlockingCallClass {
+    kSerial,
+    kConcurrent,
+  };
+
   // Runs |fn|, a blocking host call such as a disc read, without stalling the
-  // dispatch thread. On a fiber it hands |fn| to the I/O worker and parks until
-  // it finishes, otherwise it runs inline. The single worker serializes all
-  // offloaded I/O, which the vfs devices require since a zarchive reader and an
-  // STFS block file are shared across the files opened from them.
+  // dispatch thread. On a fiber it hands |fn| to an I/O worker and parks until
+  // it finishes, otherwise it runs inline. kSerial calls share one worker,
+  // kConcurrent calls go to a pool so one slow call cannot hold up the rest.
   template <typename Fn>
-  void RunBlockingHostCall(Fn&& fn) {
+  void RunBlockingHostCall(
+      Fn&& fn, BlockingCallClass call_class = BlockingCallClass::kSerial) {
     if (!CurrentThreadOffloadsBlockingCalls()) {
       fn();
       return;
     }
-    RunBlockingHostCallOffloaded(std::function<void()>(std::forward<Fn>(fn)));
+    RunBlockingHostCallOffloaded(std::function<void()>(std::forward<Fn>(fn)),
+                                 call_class);
   }
 
   // True when the calling thread is a scheduler-managed fiber, so a blocking
@@ -257,11 +267,20 @@ class GuestScheduler {
   // Raises preempt_requested on any CPU whose running fiber outlived its
   // slice, since a dispatch thread cannot tick while it runs a fiber.
   void WatchdogLoop();
-  // Offload path of RunBlockingHostCall: queue to the I/O worker and park.
-  void RunBlockingHostCallOffloaded(const std::function<void()>& fn);
-  // Lazily starts the single I/O worker on first RunBlockingHostCall.
+  struct BlockingCall;
+  // Offload path of RunBlockingHostCall: queue to an I/O worker and park.
+  void RunBlockingHostCallOffloaded(const std::function<void()>& fn,
+                                    BlockingCallClass call_class);
+  // Lazily starts the serial I/O worker on the first kSerial offload.
   void EnsureIoWorker();
   void IoWorkerLoop();
+  // Queues a kConcurrent call, growing the pool when every worker is busy.
+  void EnqueuePoolCall(BlockingCall* call);
+  // Caller holds io_pool_lock_.
+  void StartPoolWorkerLocked();
+  void IoPoolWorkerLoop();
+  // Runs one queued call, accumulates its counters and wakes the caller.
+  void RunBlockingCall(BlockingCall* call);
   // Unlinks |thread| from a singly-linked list (ready_next), fixing up tail.
   static void UnlinkLocked(XThread*& head, XThread*& tail, XThread* thread);
   // Appends to a singly-linked list (ready_next), fixing up tail.
@@ -338,7 +357,7 @@ class GuestScheduler {
   };
   // Cheap counters for the costs this scheduler adds on a mobile SoC: how
   // often parked waiters force a dispatch CPU awake, and how long offloaded
-  // blocking calls queue behind the single I/O worker. Reported by
+  // blocking calls queue behind an I/O worker. Reported by
   // ReportStatsIfDue when guest_scheduler_stats is set.
   struct Stats {
     std::atomic<uint64_t> repolls{0};          // RereadyBlocked passes
@@ -360,6 +379,9 @@ class GuestScheduler {
     std::atomic<uint64_t> io_queue_ns{0};  // time queued before the worker ran
     std::atomic<uint64_t> io_run_ns{0};    // time inside the blocking call
     std::atomic<uint64_t> io_queue_max_ns{0};
+    // Most pool workers inside a call at once. Queue wait cannot show this.
+    // An idle worker takes a call immediately, so it stays low either way.
+    std::atomic<uint64_t> io_peak_inflight{0};
   };
   Stats stats_;
   uint64_t stats_last_report_ms_ = 0;
@@ -373,6 +395,18 @@ class GuestScheduler {
   std::queue<BlockingCall*> io_queue_;
   std::unique_ptr<xe::threading::Thread> io_thread_;
   std::unique_ptr<xe::threading::Event> io_event_;
+
+  // Pool for the calls a device lets overlap, grown on demand. The workers
+  // sit blocked in a host read, so the bound is not a host core count.
+  static constexpr size_t kMaxIoPoolThreads = 4;
+  std::mutex io_pool_lock_;
+  std::condition_variable io_pool_cv_;
+  std::queue<BlockingCall*> io_pool_queue_;
+  std::vector<std::unique_ptr<xe::threading::Thread>> io_pool_threads_;
+  // Pool workers currently inside a call, under io_pool_lock_.
+  size_t io_pool_busy_ = 0;
+  // Mirrors io_pool_threads_.size() so the stats report skips io_pool_lock_.
+  std::atomic<size_t> io_pool_size_{0};
 };
 
 }  // namespace kernel

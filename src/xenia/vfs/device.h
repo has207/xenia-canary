@@ -30,6 +30,10 @@ class Device {
   const std::string& mount_path() const { return mount_path_; }
   virtual bool is_read_only() const { return true; }
 
+  // True when two of this device's files can be read at the same time. False
+  // for a shared file cursor, or a reader that serializes internally.
+  virtual bool supports_concurrent_io() const { return false; }
+
   virtual void Dump(StringBuffer* string_buffer) = 0;
   virtual Entry* ResolvePath(const std::string_view path) = 0;
 
