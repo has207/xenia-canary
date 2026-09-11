@@ -45,7 +45,7 @@ msgstr "&Acerca de…"
 
 #: src/xenia/app/emulator_window.cc:794
 msgid "&Add Games..."
-msgstr "A&gregar juegos…"
+msgstr "Añadir &juegos…"
 
 #: src/xenia/app/emulator_window.cc:864
 msgid "&Audio"
@@ -89,7 +89,7 @@ msgstr "&Detener juego"
 
 #: src/xenia/app/emulator_window.cc:874
 msgid "&Tools"
-msgstr "Herramien&tas"
+msgstr "&Herramientas"
 
 #: src/xenia/app/emulator_window.cc:853
 msgid "&View"
@@ -122,7 +122,7 @@ msgstr "Añadir juegos"
 #: src/xenia/ui/game_config_dialog_wx.cc:187
 #: src/xenia/ui/game_config_dialog_wx.cc:468
 msgid "Add Override"
-msgstr "Agregar anulación"
+msgstr "Añadir anulación"
 
 #: src/xenia/app/emulator_window.cc:2258
 msgid "Add games"
@@ -130,7 +130,7 @@ msgstr "Añadir juegos"
 
 #: src/xenia/ui/game_config_dialog_wx.cc:307
 msgid "Add..."
-msgstr "Agregar…"
+msgstr "Añadir…"
 
 #: src/xenia/ui/quick_settings_dialog_wx.cc:327
 msgid "Advanced..."
@@ -394,7 +394,7 @@ msgstr "Frecuencia de actualización de pantalla emulada:"
 
 #: src/xenia/ui/quick_settings_dialog_wx.cc:79
 msgid "Emulator Settings"
-msgstr "Configuración del emulador"
+msgstr "Ajustes del emulador"
 
 #: src/xenia/ui/profile_editor_dialog_wx.cc:52
 msgid "English"
@@ -600,7 +600,7 @@ msgstr "Error al importar"
 
 #: src/xenia/ui/quick_settings_dialog_wx.cc:305
 msgid "In-Process Title Relaunch:"
-msgstr "Relanzamiento de título en proceso:"
+msgstr "Reinicio del título en proceso:"
 
 #: src/xenia/ui/profile_editor_dialog_wx.cc:111
 msgid "India"
@@ -791,7 +791,7 @@ msgid ""
 "settings need a relaunch to take effect."
 msgstr ""
 "Administra la configuración del emulador. Los cambios se guardan en config."
-"toml; algunos ajustes requieren reiniciar para aplicarse."
+"toml; algunos ajustes requieren un reinicio para aplicarse."
 
 #: src/xenia/ui/advanced_settings_dialog_wx.cc:273
 msgid "MangoHUD not in PATH; install to enable."
@@ -832,7 +832,7 @@ msgstr "Nombre: %s"
 
 #: src/xenia/ui/quick_settings_dialog_wx.cc:175
 msgid "Native"
-msgstr "Nativo"
+msgstr "Nativa"
 
 #: src/xenia/ui/profile_editor_dialog_wx.cc:139
 msgid "Netherlands"
@@ -898,7 +898,7 @@ msgstr "Dominio en línea:"
 
 #: src/xenia/ui/profile_editor_dialog_wx.cc:476
 msgid "Online Profile Settings"
-msgstr "Configuración del perfil en línea"
+msgstr "Ajustes del perfil en línea"
 
 #: src/xenia/ui/profile_editor_dialog_wx.cc:495
 msgid "Online XUID:"
@@ -992,7 +992,7 @@ msgstr "Perfil"
 
 #: src/xenia/ui/profile_editor_dialog_wx.cc:380
 msgid "Profile Settings"
-msgstr "Configuración del perfil"
+msgstr "Ajustes del perfil"
 
 #: src/xenia/ui/profile_editor_dialog_wx.cc:608
 msgid "Profile icon must be 64x64 or 32x32. Selected image is %dx%d."
@@ -1001,7 +1001,7 @@ msgstr ""
 
 #: src/xenia/ui/profile_editor_dialog_wx.cc:399
 msgid "Profile must be signed in to change the icon."
-msgstr "El perfil debe tener sesión iniciada para cambiar el icono."
+msgstr "El perfil debe haber iniciado sesión para cambiar el icono."
 
 #: src/xenia/ui/game_scan_progress_dialog_wx.cc:94
 msgid "Publisher: %s"
@@ -1101,7 +1101,7 @@ msgstr "Guardar cambios"
 
 #: src/xenia/ui/patches_dialog_wx.cc:236
 msgid "Saved. Takes effect on next launch."
-msgstr "Guardado. Surte efecto en el próximo inicio."
+msgstr "Guardado. Se aplica en el próximo inicio."
 
 #: src/xenia/ui/game_list_panel_wx.cc:981
 msgid "Saves"
@@ -1150,7 +1150,7 @@ msgstr "El archivo seleccionado no es una imagen PNG válida."
 #: src/xenia/app/emulator_window.cc:955 src/xenia/app/emulator_window.cc:956
 #: src/xenia/app/emulator_window.cc:1722
 msgid "Settings"
-msgstr "Configuración"
+msgstr "Ajustes"
 
 #: src/xenia/app/emulator_window.cc:856
 msgid "Show &Toolbar"
@@ -1265,7 +1265,7 @@ msgstr "Título no encontrado"
 
 #: src/xenia/ui/patches_dialog_wx.cc:155
 msgid "Toggles take effect on next launch."
-msgstr "Los cambios surten efecto en el próximo inicio."
+msgstr "Los cambios se aplican en el próximo inicio."
 
 #: src/xenia/ui/profile_editor_dialog_wx.cc:59
 msgid "Traditional Chinese"
@@ -1317,7 +1317,7 @@ msgstr "Activar sonido"
 
 #: src/xenia/ui/game_list_panel_wx.cc:100
 msgid "Unplayable"
-msgstr "No jugable"
+msgstr "Injugable"
 
 #: src/xenia/ui/quick_settings_dialog_wx.cc:341
 #: src/xenia/ui/quick_settings_dialog_wx.cc:619
@@ -1397,8 +1397,8 @@ msgstr "Tienes cambios sin guardar. ¿Descartarlos?"
 #: src/xenia/ui/quick_settings_dialog_wx.cc:617
 msgid "You have unsaved changes. Save them before opening advanced settings?"
 msgstr ""
-"Tienes cambios sin guardar. ¿Guardarlos antes de abrir la configuración "
-"avanzada?"
+"Tienes cambios sin guardar. ¿Guardarlos antes de abrir los ajustes "
+"avanzados?"
 
 #: src/xenia/ui/profile_editor_dialog_wx.cc:175
 msgid "Zimbabwe"
