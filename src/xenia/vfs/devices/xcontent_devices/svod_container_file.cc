@@ -24,8 +24,11 @@ void SvodContainerFile::Destroy() { delete this; }
 size_t SvodContainerFile::Read(std::span<uint8_t> buffer, size_t offset,
                                size_t record_file) {
   auto& file = entry_->files()->at(record_file);
-  xe::filesystem::Seek(file, offset, SEEK_SET);
-  return fread(buffer.data(), 1, buffer.size(), file);
+  size_t bytes_read = 0;
+  if (!file->Read(offset, buffer.data(), buffer.size(), &bytes_read)) {
+    return 0;
+  }
+  return bytes_read;
 }
 
 }  // namespace vfs

@@ -11,13 +11,18 @@
 #define XENIA_VFS_DEVICES_XCONTENT_SVOD_CONTAINER_ENTRY_H_
 
 #include <map>
+#include <memory>
 
+#include "xenia/base/filesystem.h"
 #include "xenia/vfs/devices/xcontent_container_entry.h"
 #include "xenia/vfs/file.h"
 
 namespace xe {
 namespace vfs {
-typedef std::map<size_t, FILE*> MultiFileHandles;
+// One handle per data fragment, read at an explicit offset. No shared cursor,
+// so two of this device's files can be read at once.
+using MultiFileHandles =
+    std::map<size_t, std::unique_ptr<xe::filesystem::FileHandle>>;
 
 class XContentContainerDevice;
 
