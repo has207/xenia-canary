@@ -1506,7 +1506,7 @@ msgstr "معلوماتی پین بند کریں"
 
 #: src/xenia/ui/game_info_panel_wx.cc:215
 msgid "Configuration"
-msgstr "تشکیل"
+msgstr "کنفیگریشن"
 
 #: src/xenia/ui/game_info_panel_wx.cc:437
 msgid "Details"

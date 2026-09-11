@@ -1505,7 +1505,7 @@ msgstr "إغلاق لوحة المعلومات"
 
 #: src/xenia/ui/game_info_panel_wx.cc:215
 msgid "Configuration"
-msgstr "التهيئة"
+msgstr "إعدادات"
 
 #: src/xenia/ui/game_info_panel_wx.cc:437
 msgid "Details"

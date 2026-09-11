@@ -1508,7 +1508,7 @@ msgstr "Затвори таблу са подацима"
 
 #: src/xenia/ui/game_info_panel_wx.cc:215
 msgid "Configuration"
-msgstr "Конфигурација"
+msgstr "Подешавања"
 
 #: src/xenia/ui/game_info_panel_wx.cc:437
 msgid "Details"

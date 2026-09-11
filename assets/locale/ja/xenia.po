@@ -1512,7 +1512,7 @@ msgstr "情報パネルを閉じる"
 
 #: src/xenia/ui/game_info_panel_wx.cc:215
 msgid "Configuration"
-msgstr "構成"
+msgstr "設定"
 
 #: src/xenia/ui/game_info_panel_wx.cc:437
 msgid "Details"

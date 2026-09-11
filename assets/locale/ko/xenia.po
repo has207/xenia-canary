@@ -1507,7 +1507,7 @@ msgstr "정보 창 닫기"
 
 #: src/xenia/ui/game_info_panel_wx.cc:215
 msgid "Configuration"
-msgstr "구성"
+msgstr "설정"
 
 #: src/xenia/ui/game_info_panel_wx.cc:437
 msgid "Details"

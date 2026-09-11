@@ -1510,7 +1510,7 @@ msgstr "Закрити панель відомостей"
 
 #: src/xenia/ui/game_info_panel_wx.cc:215
 msgid "Configuration"
-msgstr "Конфігурація"
+msgstr "Налаштування"
 
 #: src/xenia/ui/game_info_panel_wx.cc:437
 msgid "Details"
