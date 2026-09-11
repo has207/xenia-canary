@@ -484,8 +484,8 @@ msgid "Gamepad"
 msgstr "गेमपैड"
 
 #: src/xenia/ui/game_list_panel_wx.cc:96
-msgid "Gameplay"
-msgstr "गेमप्ले"
+msgid "Gets in game"
+msgstr "गेम में पहुँचता है"
 
 #: src/xenia/ui/profile_editor_dialog_wx.cc:458
 msgid "Gamer Bio:"
@@ -752,7 +752,7 @@ msgstr "टाइटल लोड हो रहे हैं…"
 
 #: src/xenia/ui/game_list_panel_wx.cc:98
 msgid "Loads"
-msgstr "लोड"
+msgstr "शुरू होता है"
 
 #: src/xenia/app/emulator_window.cc:2003
 msgid "Login"

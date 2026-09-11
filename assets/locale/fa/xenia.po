@@ -484,8 +484,8 @@ msgid "Gamepad"
 msgstr "گیم‌پد"
 
 #: src/xenia/ui/game_list_panel_wx.cc:96
-msgid "Gameplay"
-msgstr "قابل بازی"
+msgid "Gets in game"
+msgstr "وارد بازی می‌شود"
 
 #: src/xenia/ui/profile_editor_dialog_wx.cc:458
 msgid "Gamer Bio:"
@@ -752,7 +752,7 @@ msgstr "در حال بارگذاری بازی‌ها…"
 
 #: src/xenia/ui/game_list_panel_wx.cc:98
 msgid "Loads"
-msgstr "بارگذاری می‌شود"
+msgstr "اجرا می‌شود"
 
 #: src/xenia/app/emulator_window.cc:2003
 msgid "Login"

@@ -19,7 +19,7 @@ wxString CompatStateName(CompatState state) {
     case CompatState::kPlayable:
       return _("Playable");
     case CompatState::kGameplay:
-      return _("Gameplay");
+      return _("Gets in game");
     case CompatState::kLoads:
       return _("Loads");
     case CompatState::kUnplayable:

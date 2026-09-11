@@ -484,8 +484,8 @@ msgid "Gamepad"
 msgstr "게임패드"
 
 #: src/xenia/ui/game_list_panel_wx.cc:96
-msgid "Gameplay"
-msgstr "플레이 가능"
+msgid "Gets in game"
+msgstr "게임 진입"
 
 #: src/xenia/ui/profile_editor_dialog_wx.cc:458
 msgid "Gamer Bio:"

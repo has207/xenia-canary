@@ -485,8 +485,8 @@ msgid "Gamepad"
 msgstr "গেমপ্যাড"
 
 #: src/xenia/ui/game_list_panel_wx.cc:96
-msgid "Gameplay"
-msgstr "গেমপ্লে"
+msgid "Gets in game"
+msgstr "গেমে প্রবেশ করে"
 
 #: src/xenia/ui/profile_editor_dialog_wx.cc:458
 msgid "Gamer Bio:"
@@ -753,7 +753,7 @@ msgstr "টাইটেল লোড করা হচ্ছে…"
 
 #: src/xenia/ui/game_list_panel_wx.cc:98
 msgid "Loads"
-msgstr "লোড"
+msgstr "চালু হয়"
 
 #: src/xenia/app/emulator_window.cc:2003
 msgid "Login"

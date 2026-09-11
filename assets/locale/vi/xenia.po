@@ -484,8 +484,8 @@ msgid "Gamepad"
 msgstr "Gamepad"
 
 #: src/xenia/ui/game_list_panel_wx.cc:96
-msgid "Gameplay"
-msgstr "Lối chơi"
+msgid "Gets in game"
+msgstr "Vào được game"
 
 #: src/xenia/ui/profile_editor_dialog_wx.cc:458
 msgid "Gamer Bio:"
@@ -752,7 +752,7 @@ msgstr "Đang nạp tựa game…"
 
 #: src/xenia/ui/game_list_panel_wx.cc:98
 msgid "Loads"
-msgstr "Lượt tải"
+msgstr "Khởi động được"
 
 #: src/xenia/app/emulator_window.cc:2003
 msgid "Login"

@@ -485,8 +485,8 @@ msgid "Gamepad"
 msgstr "Gamepad"
 
 #: src/xenia/ui/game_list_panel_wx.cc:96
-msgid "Gameplay"
-msgstr "Hrateľnosť"
+msgid "Gets in game"
+msgstr "Dostane sa do hry"
 
 #: src/xenia/ui/profile_editor_dialog_wx.cc:458
 msgid "Gamer Bio:"
@@ -753,7 +753,7 @@ msgstr "Načítavajú sa tituly…"
 
 #: src/xenia/ui/game_list_panel_wx.cc:98
 msgid "Loads"
-msgstr "Načítava sa"
+msgstr "Spustí sa"
 
 #: src/xenia/app/emulator_window.cc:2003
 msgid "Login"

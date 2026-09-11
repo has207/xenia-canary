@@ -486,8 +486,8 @@ msgid "Gamepad"
 msgstr "Геймпад"
 
 #: src/xenia/ui/game_list_panel_wx.cc:96
-msgid "Gameplay"
-msgstr "Геймплей"
+msgid "Gets in game"
+msgstr "Входить у гру"
 
 #: src/xenia/ui/profile_editor_dialog_wx.cc:458
 msgid "Gamer Bio:"
@@ -754,7 +754,7 @@ msgstr "Завантаження ігор…"
 
 #: src/xenia/ui/game_list_panel_wx.cc:98
 msgid "Loads"
-msgstr "Завантажується"
+msgstr "Запускається"
 
 #: src/xenia/app/emulator_window.cc:2003
 msgid "Login"
@@ -963,7 +963,7 @@ msgstr "Філіппіни"
 
 #: src/xenia/ui/game_list_panel_wx.cc:94
 msgid "Playable"
-msgstr "Грабельна"
+msgstr "Іграбельна"
 
 #: src/xenia/ui/profile_editor_dialog_wx.cc:147
 msgid "Poland"
@@ -1314,7 +1314,7 @@ msgstr "Увімкнути звук"
 
 #: src/xenia/ui/game_list_panel_wx.cc:100
 msgid "Unplayable"
-msgstr "Неграбельна"
+msgstr "Неіграбельна"
 
 #: src/xenia/ui/quick_settings_dialog_wx.cc:341
 #: src/xenia/ui/quick_settings_dialog_wx.cc:619

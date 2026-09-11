@@ -485,8 +485,8 @@ msgid "Gamepad"
 msgstr "Gamepad"
 
 #: src/xenia/ui/game_list_panel_wx.cc:96
-msgid "Gameplay"
-msgstr "Παίζεται"
+msgid "Gets in game"
+msgstr "Μπαίνει στο παιχνίδι"
 
 #: src/xenia/ui/profile_editor_dialog_wx.cc:458
 msgid "Gamer Bio:"
@@ -753,7 +753,7 @@ msgstr "Φόρτωση τίτλων…"
 
 #: src/xenia/ui/game_list_panel_wx.cc:98
 msgid "Loads"
-msgstr "Φορτώνει"
+msgstr "Εκκινεί"
 
 #: src/xenia/app/emulator_window.cc:2003
 msgid "Login"
@@ -962,7 +962,7 @@ msgstr "Φιλιππίνες"
 
 #: src/xenia/ui/game_list_panel_wx.cc:94
 msgid "Playable"
-msgstr "Παίξιμο"
+msgstr "Παίζεται"
 
 #: src/xenia/ui/profile_editor_dialog_wx.cc:147
 msgid "Poland"

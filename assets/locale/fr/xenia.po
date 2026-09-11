@@ -484,8 +484,8 @@ msgid "Gamepad"
 msgstr "Manette"
 
 #: src/xenia/ui/game_list_panel_wx.cc:96
-msgid "Gameplay"
-msgstr "Jouable"
+msgid "Gets in game"
+msgstr "Entre en jeu"
 
 #: src/xenia/ui/profile_editor_dialog_wx.cc:458
 msgid "Gamer Bio:"

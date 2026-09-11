@@ -486,8 +486,8 @@ msgid "Gamepad"
 msgstr "கேம்பேட்"
 
 #: src/xenia/ui/game_list_panel_wx.cc:96
-msgid "Gameplay"
-msgstr "விளையாட்டுமுறை"
+msgid "Gets in game"
+msgstr "விளையாட்டுக்குள் நுழைகிறது"
 
 #: src/xenia/ui/profile_editor_dialog_wx.cc:458
 msgid "Gamer Bio:"
@@ -754,7 +754,7 @@ msgstr "தலைப்புகள் ஏற்றப்படுகின்�
 
 #: src/xenia/ui/game_list_panel_wx.cc:98
 msgid "Loads"
-msgstr "ஏற்றல்கள்"
+msgstr "தொடங்குகிறது"
 
 #: src/xenia/app/emulator_window.cc:2003
 msgid "Login"

@@ -484,8 +484,8 @@ msgid "Gamepad"
 msgstr "Oyun Kumandası"
 
 #: src/xenia/ui/game_list_panel_wx.cc:96
-msgid "Gameplay"
-msgstr "Oynanış"
+msgid "Gets in game"
+msgstr "Oyuna giriyor"
 
 #: src/xenia/ui/profile_editor_dialog_wx.cc:458
 msgid "Gamer Bio:"
@@ -752,7 +752,7 @@ msgstr "Oyunlar yükleniyor…"
 
 #: src/xenia/ui/game_list_panel_wx.cc:98
 msgid "Loads"
-msgstr "Yüklemeler"
+msgstr "Başlıyor"
 
 #: src/xenia/app/emulator_window.cc:2003
 msgid "Login"

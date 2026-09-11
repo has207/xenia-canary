@@ -485,8 +485,8 @@ msgid "Gamepad"
 msgstr "وحدة تحكم"
 
 #: src/xenia/ui/game_list_panel_wx.cc:96
-msgid "Gameplay"
-msgstr "اللعب ممكن"
+msgid "Gets in game"
+msgstr "يصل إلى اللعب"
 
 #: src/xenia/ui/profile_editor_dialog_wx.cc:458
 msgid "Gamer Bio:"
@@ -753,7 +753,7 @@ msgstr "جارٍ تحميل الألعاب…"
 
 #: src/xenia/ui/game_list_panel_wx.cc:98
 msgid "Loads"
-msgstr "يُحمَّل"
+msgstr "يبدأ التشغيل"
 
 #: src/xenia/app/emulator_window.cc:2003
 msgid "Login"

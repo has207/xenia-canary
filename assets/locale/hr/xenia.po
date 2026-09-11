@@ -486,8 +486,8 @@ msgid "Gamepad"
 msgstr "Gamepad"
 
 #: src/xenia/ui/game_list_panel_wx.cc:96
-msgid "Gameplay"
-msgstr "Igrivo"
+msgid "Gets in game"
+msgstr "Ulazi u igru"
 
 #: src/xenia/ui/profile_editor_dialog_wx.cc:458
 msgid "Gamer Bio:"
@@ -754,7 +754,7 @@ msgstr "Učitavanje naslova..."
 
 #: src/xenia/ui/game_list_panel_wx.cc:98
 msgid "Loads"
-msgstr "Učitava"
+msgstr "Pokreće se"
 
 #: src/xenia/app/emulator_window.cc:2003
 msgid "Login"

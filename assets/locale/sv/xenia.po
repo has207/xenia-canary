@@ -484,8 +484,8 @@ msgid "Gamepad"
 msgstr "Handkontroll"
 
 #: src/xenia/ui/game_list_panel_wx.cc:96
-msgid "Gameplay"
-msgstr "Spelbar"
+msgid "Gets in game"
+msgstr "Kommer in i spelet"
 
 #: src/xenia/ui/profile_editor_dialog_wx.cc:458
 msgid "Gamer Bio:"
@@ -752,7 +752,7 @@ msgstr "Läser in titlar…"
 
 #: src/xenia/ui/game_list_panel_wx.cc:98
 msgid "Loads"
-msgstr "Läser in"
+msgstr "Startar"
 
 #: src/xenia/app/emulator_window.cc:2003
 msgid "Login"
