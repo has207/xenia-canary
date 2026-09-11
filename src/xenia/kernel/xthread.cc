@@ -1038,6 +1038,7 @@ void XThread::SetActiveCpu(uint8_t cpu_index) {
   assert_true(cpu_index < 6);
 
   X_KPCR& pcr = *memory()->TranslateVirtual<X_KPCR*>(pcr_address_);
+  const uint8_t previous_cpu = pcr.prcb_data.current_cpu;
   pcr.prcb_data.current_cpu = cpu_index;
 
   if (is_guest_thread()) {
@@ -1056,6 +1057,11 @@ void XThread::SetActiveCpu(uint8_t cpu_index) {
     // there no good reason why we need to log this... we don't perfectly
     // emulate the 360's scheduler in any way
     // XELOGW("Too few processor cores - scheduling will be wonky");
+  }
+
+  // The ready queues are per CPU, so a queued thread has to move.
+  if (cpu_index != previous_cpu && GuestScheduler::enabled()) {
+    kernel_state()->guest_scheduler()->MigrateForAffinity(this);
   }
 }
 

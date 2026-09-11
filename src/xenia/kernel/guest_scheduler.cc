@@ -683,6 +683,37 @@ void GuestScheduler::RequeueForPriority(XThread* thread) {
   LinkReadyLocked(cpu, thread, false);
 }
 
+void GuestScheduler::MigrateForAffinity(XThread* thread) {
+  int target = -1;
+  {
+    std::lock_guard<std::mutex> lock(lock_);
+    auto& links = thread->scheduler_links();
+    // A running fiber's context is not saved yet, so only its own dispatch
+    // thread may move it. Parked ones re-home when they are made ready.
+    if (!links.queued || links.running || links.cpu < 0) {
+      return;
+    }
+    target = CpuOf(thread);
+    if (target == links.cpu) {
+      return;
+    }
+    Cpu& from = cpus_[links.cpu];
+    int prio = links.queued_prio;
+    UnlinkLocked(from.ready_head[prio], from.ready_tail[prio], thread);
+    if (!from.ready_head[prio]) {
+      from.ready_summary &= ~(uint32_t(1) << prio);
+    }
+    if (from.yield_to_other == thread) {
+      from.yield_to_other = nullptr;
+    }
+    links.cpu = target;
+    LinkReadyLocked(cpus_[target], thread, TakeHeadRequeue(links));
+  }
+  if (cpus_[target].parked.load() && cpus_[target].ready_event) {
+    cpus_[target].ready_event->Set();
+  }
+}
+
 bool GuestScheduler::ForgetThread(XThread* thread) {
   std::lock_guard<std::mutex> lock(lock_);
   auto& links = thread->scheduler_links();
