@@ -48,14 +48,14 @@ msgstr "Přid&at hry…"
 
 #: src/xenia/app/emulator_window.cc:864
 msgid "&Audio"
-msgstr "&Zvuk"
+msgstr "Z&vuk"
 
 #: src/xenia/app/emulator_window.cc:824
 msgid "&Configuration"
 msgstr "Konfigura&ce"
 
 #: src/xenia/app/emulator_window.cc:898
-msgid "&Controllers"
+msgid "C&ontrollers"
 msgstr "&Ovladače"
 
 #: src/xenia/app/emulator_window.cc:786

@@ -43,19 +43,19 @@ msgstr "Inform&azioni…"
 
 #: src/xenia/app/emulator_window.cc:794
 msgid "&Add Games..."
-msgstr "&Aggiungi giochi..."
+msgstr "A&ggiungi giochi..."
 
 #: src/xenia/app/emulator_window.cc:864
 msgid "&Audio"
-msgstr "&Audio"
+msgstr "A&udio"
 
 #: src/xenia/app/emulator_window.cc:824
 msgid "&Configuration"
 msgstr "&Configurazione"
 
 #: src/xenia/app/emulator_window.cc:898
-msgid "&Controllers"
-msgstr "&Controller"
+msgid "C&ontrollers"
+msgstr "C&ontroller"
 
 #: src/xenia/app/emulator_window.cc:786
 msgid "&File"

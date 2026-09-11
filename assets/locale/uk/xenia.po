@@ -56,7 +56,7 @@ msgid "&Configuration"
 msgstr "&Налаштування"
 
 #: src/xenia/app/emulator_window.cc:898
-msgid "&Controllers"
+msgid "C&ontrollers"
 msgstr "&Контролери"
 
 #: src/xenia/app/emulator_window.cc:786
@@ -370,7 +370,7 @@ msgstr "Домініканська Республіка"
 
 #: src/xenia/app/emulator_window.cc:809
 msgid "E&xit"
-msgstr "&Вихід"
+msgstr "Ви&хід"
 
 #: src/xenia/ui/profile_editor_dialog_wx.cc:93
 msgid "Ecuador"

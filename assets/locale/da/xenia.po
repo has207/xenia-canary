@@ -54,7 +54,7 @@ msgid "&Configuration"
 msgstr "&Konfiguration"
 
 #: src/xenia/app/emulator_window.cc:898
-msgid "&Controllers"
+msgid "C&ontrollers"
 msgstr "&Controllere"
 
 #: src/xenia/app/emulator_window.cc:786

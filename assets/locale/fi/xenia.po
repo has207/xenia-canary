@@ -54,7 +54,7 @@ msgid "&Configuration"
 msgstr "&Määritykset"
 
 #: src/xenia/app/emulator_window.cc:898
-msgid "&Controllers"
+msgid "C&ontrollers"
 msgstr "&Ohjaimet"
 
 #: src/xenia/app/emulator_window.cc:786
@@ -87,7 +87,7 @@ msgstr "Py&säytä peli"
 
 #: src/xenia/app/emulator_window.cc:874
 msgid "&Tools"
-msgstr "&Työkalut"
+msgstr "T&yökalut"
 
 #: src/xenia/app/emulator_window.cc:853
 msgid "&View"
@@ -368,7 +368,7 @@ msgstr "Dominikaaninen tasavalta"
 
 #: src/xenia/app/emulator_window.cc:809
 msgid "E&xit"
-msgstr "&Lopeta"
+msgstr "L&opeta"
 
 #: src/xenia/ui/profile_editor_dialog_wx.cc:93
 msgid "Ecuador"

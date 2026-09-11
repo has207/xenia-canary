@@ -54,7 +54,7 @@ msgid "&Configuration"
 msgstr "&Yapılandırma"
 
 #: src/xenia/app/emulator_window.cc:898
-msgid "&Controllers"
+msgid "C&ontrollers"
 msgstr "&Kumandalar"
 
 #: src/xenia/app/emulator_window.cc:786
@@ -63,7 +63,7 @@ msgstr "&Dosya"
 
 #: src/xenia/app/emulator_window.cc:884
 msgid "&Help"
-msgstr "&Yardım"
+msgstr "Ya&rdım"
 
 #: src/xenia/app/emulator_window.cc:877
 msgid "&Install Content..."

@@ -56,8 +56,8 @@ msgid "&Configuration"
 msgstr "கட்டமைப்பு(&C)"
 
 #: src/xenia/app/emulator_window.cc:898
-msgid "&Controllers"
-msgstr "கட்டுப்படுத்திகள்(&C)"
+msgid "C&ontrollers"
+msgstr "கட்டுப்படுத்திகள்(&O)"
 
 #: src/xenia/app/emulator_window.cc:786
 msgid "&File"

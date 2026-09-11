@@ -55,8 +55,8 @@ msgid "&Configuration"
 msgstr "&Konfigurasi"
 
 #: src/xenia/app/emulator_window.cc:898
-msgid "&Controllers"
-msgstr "&Pengontrol"
+msgid "C&ontrollers"
+msgstr "P&engontrol"
 
 #: src/xenia/app/emulator_window.cc:786
 msgid "&File"
@@ -64,7 +64,7 @@ msgstr "&Berkas"
 
 #: src/xenia/app/emulator_window.cc:884
 msgid "&Help"
-msgstr "&Bantuan"
+msgstr "Bant&uan"
 
 #: src/xenia/app/emulator_window.cc:877
 msgid "&Install Content..."
@@ -88,7 +88,7 @@ msgstr "&Hentikan Permainan"
 
 #: src/xenia/app/emulator_window.cc:874
 msgid "&Tools"
-msgstr "Ala&t"
+msgstr "A&lat"
 
 #: src/xenia/app/emulator_window.cc:853
 msgid "&View"

@@ -55,8 +55,8 @@ msgid "&Configuration"
 msgstr "Διαμόρφωση(&C)"
 
 #: src/xenia/app/emulator_window.cc:898
-msgid "&Controllers"
-msgstr "Χειριστήρια(&C)"
+msgid "C&ontrollers"
+msgstr "Χειριστήρια(&O)"
 
 #: src/xenia/app/emulator_window.cc:786
 msgid "&File"

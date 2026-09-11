@@ -1108,7 +1108,7 @@ bool EmulatorWindow::Initialize() {
 
     // Controllers Menu
     auto controllers_menu =
-        WxMenuItem::Create(MenuItem::Type::kPopup, _("&Controllers"));
+        WxMenuItem::Create(MenuItem::Type::kPopup, _("C&ontrollers"));
     controllers_menu_ = controllers_menu.get();
     main_menu->AddChild(std::move(controllers_menu));
 

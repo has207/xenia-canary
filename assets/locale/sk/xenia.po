@@ -48,14 +48,14 @@ msgstr "Prid&ať hry…"
 
 #: src/xenia/app/emulator_window.cc:864
 msgid "&Audio"
-msgstr "&Zvuk"
+msgstr "Z&vuk"
 
 #: src/xenia/app/emulator_window.cc:824
 msgid "&Configuration"
 msgstr "Konfigurá&cia"
 
 #: src/xenia/app/emulator_window.cc:898
-msgid "&Controllers"
+msgid "C&ontrollers"
 msgstr "&Ovládače"
 
 #: src/xenia/app/emulator_window.cc:786
@@ -64,7 +64,7 @@ msgstr "&Súbor"
 
 #: src/xenia/app/emulator_window.cc:884
 msgid "&Help"
-msgstr "&Pomocník"
+msgstr "Po&mocník"
 
 #: src/xenia/app/emulator_window.cc:877
 msgid "&Install Content..."

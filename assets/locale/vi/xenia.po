@@ -54,8 +54,8 @@ msgid "&Configuration"
 msgstr "&Cấu hình"
 
 #: src/xenia/app/emulator_window.cc:898
-msgid "&Controllers"
-msgstr "Tay &cầm"
+msgid "C&ontrollers"
+msgstr "Tay cầ&m"
 
 #: src/xenia/app/emulator_window.cc:786
 msgid "&File"
@@ -63,7 +63,7 @@ msgstr "&Tệp"
 
 #: src/xenia/app/emulator_window.cc:884
 msgid "&Help"
-msgstr "&Trợ giúp"
+msgstr "Trợ &giúp"
 
 #: src/xenia/app/emulator_window.cc:877
 msgid "&Install Content..."
@@ -87,7 +87,7 @@ msgstr "&Dừng trò chơi"
 
 #: src/xenia/app/emulator_window.cc:874
 msgid "&Tools"
-msgstr "&Công cụ"
+msgstr "Cô&ng cụ"
 
 #: src/xenia/app/emulator_window.cc:853
 msgid "&View"
@@ -368,7 +368,7 @@ msgstr "Cộng hòa Dominica"
 
 #: src/xenia/app/emulator_window.cc:809
 msgid "E&xit"
-msgstr "&Thoát"
+msgstr "T&hoát"
 
 #: src/xenia/ui/profile_editor_dialog_wx.cc:93
 msgid "Ecuador"

@@ -57,7 +57,7 @@ msgid "&Configuration"
 msgstr "Konfigura&cja"
 
 #: src/xenia/app/emulator_window.cc:898
-msgid "&Controllers"
+msgid "C&ontrollers"
 msgstr "&Kontrolery"
 
 #: src/xenia/app/emulator_window.cc:786
@@ -66,7 +66,7 @@ msgstr "&Plik"
 
 #: src/xenia/app/emulator_window.cc:884
 msgid "&Help"
-msgstr "&Pomoc"
+msgstr "P&omoc"
 
 #: src/xenia/app/emulator_window.cc:877
 msgid "&Install Content..."
@@ -82,7 +82,7 @@ msgstr "&Otwórz…"
 
 #: src/xenia/app/emulator_window.cc:816
 msgid "&Profile"
-msgstr "&Profil"
+msgstr "Pro&fil"
 
 #: src/xenia/app/emulator_window.cc:799
 msgid "&Stop Game"

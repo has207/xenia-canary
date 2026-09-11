@@ -56,7 +56,7 @@ msgid "&Configuration"
 msgstr "&Configuration"
 
 #: src/xenia/app/emulator_window.cc:898
-msgid "&Controllers"
+msgid "C&ontrollers"
 msgstr "&Mga Kontroler"
 
 #: src/xenia/app/emulator_window.cc:786
@@ -65,7 +65,7 @@ msgstr "&File"
 
 #: src/xenia/app/emulator_window.cc:884
 msgid "&Help"
-msgstr "&Tulong"
+msgstr "T&ulong"
 
 #: src/xenia/app/emulator_window.cc:877
 msgid "&Install Content..."
@@ -89,7 +89,7 @@ msgstr "&Itigil ang Laro"
 
 #: src/xenia/app/emulator_window.cc:874
 msgid "&Tools"
-msgstr "Mga &Tool"
+msgstr "Mga T&ool"
 
 #: src/xenia/app/emulator_window.cc:853
 msgid "&View"
