@@ -1068,9 +1068,14 @@ void GuestScheduler::WaitOnFence(xe::threading::Fence& fence) {
 
 void GuestScheduler::RunBlockingHostCallOffloaded(
     const std::function<void()>& fn, BlockingCallClass call_class) {
+  XThread* self = XThread::GetCurrentFiberThread();
   BlockingCall call;
   call.fn = &fn;
   call.queued_ns = Clock::host_tick_count_raw();
+  // Set before queueing, since the worker can finish before this fiber parks.
+  // Nothing switches fibers between here and the park, so this is the CPU it
+  // parks on.
+  call.waiter_cpu = t_current_cpu;
   if (call_class == BlockingCallClass::kConcurrent) {
     EnqueuePoolCall(&call);
   } else {
@@ -1081,7 +1086,6 @@ void GuestScheduler::RunBlockingHostCallOffloaded(
     }
     io_event_->Set();
   }
-  XThread* self = XThread::GetCurrentFiberThread();
   if (self) {
     self->set_cooperative_wait_shape(XThread::CooperativeWaitKind::kIoOffload,
                                      nullptr, 0);
@@ -1105,9 +1109,36 @@ void GuestScheduler::RunBlockingCall(BlockingCall* call) {
   stats_.io_queue_ns.fetch_add(queued_for, std::memory_order_relaxed);
   stats_.io_run_ns.fetch_add(finished - started, std::memory_order_relaxed);
   AccumulateMax(stats_.io_queue_max_ns, queued_for);
+  // Read before publishing. Once done is set the caller can resume, unwind the
+  // stack frame |call| lives in, and exit.
+  int waiter_cpu = call->waiter_cpu;
   call->done.store(true, std::memory_order_release);
-  // Wake the parked caller instead of leaving it to the backoff timer.
-  WakeAll();
+  // Exactly one fiber is waiting, so poke its CPU rather than sweep all of
+  // them the way a signal on a shared object has to.
+  WakeBlockedCpu(waiter_cpu);
+}
+
+void GuestScheduler::WakeBlockedCpu(int cpu_index) {
+  if (cpu_index < 0 || cpu_index >= kMaxCpus || !started_.load()) {
+    return;
+  }
+  {
+    std::lock_guard<std::mutex> lock(lock_);
+    Cpu& cpu = cpus_[cpu_index];
+    if (!cpu.blocked_head) {
+      return;
+    }
+    cpu.repoll_now.store(true, std::memory_order_relaxed);
+    XThread* running = cpu.current_thread;
+    // Speculative like WakeAll's, so a re-poll wake rather than a preemption.
+    if (running && cpu.max_blocked_prio > ClampPriority(running->priority())) {
+      running->scheduler_links().repoll_preempt = true;
+      running->thread_state()->context()->preempt_requested = 1;
+    }
+  }
+  if (cpus_[cpu_index].parked.load() && cpus_[cpu_index].ready_event) {
+    cpus_[cpu_index].ready_event->Set();
+  }
 }
 
 void GuestScheduler::IoWorkerLoop() {

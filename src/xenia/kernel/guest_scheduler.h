@@ -281,6 +281,10 @@ class GuestScheduler {
   void IoPoolWorkerLoop();
   // Runs one queued call, accumulates its counters and wakes the caller.
   void RunBlockingCall(BlockingCall* call);
+  // WakeAll narrowed to one CPU, for a wake whose single waiter is known to
+  // be parked there. Takes an index rather than the thread, so a caller that
+  // has already resumed and exited cannot be dereferenced.
+  void WakeBlockedCpu(int cpu_index);
   // Unlinks |thread| from a singly-linked list (ready_next), fixing up tail.
   static void UnlinkLocked(XThread*& head, XThread*& tail, XThread* thread);
   // Appends to a singly-linked list (ready_next), fixing up tail.
@@ -354,6 +358,9 @@ class GuestScheduler {
     std::atomic<bool> done{false};
     // Raw host ticks when queued, for the I/O wait-time counter.
     uint64_t queued_ns = 0;
+    // Dispatch CPU the waiting fiber parks on. A stale index after a
+    // migration costs one spurious re-poll, which the ungated wait absorbs.
+    int waiter_cpu = -1;
   };
   // Cheap counters for the costs this scheduler adds on a mobile SoC: how
   // often parked waiters force a dispatch CPU awake, and how long offloaded
