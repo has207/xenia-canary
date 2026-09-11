@@ -333,7 +333,7 @@ msgstr "Cộng hòa Séc"
 
 #: src/xenia/app/emulator_window.cc:335
 msgid "Dance Pad"
-msgstr "Thảm Nhảy"
+msgstr "Thảm nhảy"
 
 #: src/xenia/ui/profile_editor_dialog_wx.cc:90
 msgid "Denmark"
@@ -425,7 +425,7 @@ msgstr "Quần đảo Faroe"
 
 #: src/xenia/app/emulator_window.cc:341
 msgid "Drum Kit"
-msgstr "Bộ Trống"
+msgstr "Bộ trống"
 
 #: src/xenia/ui/game_list_panel_wx.cc:1236
 msgid "File Corrupted"
@@ -469,7 +469,7 @@ msgstr "Toàn màn hình:"
 
 #: src/xenia/app/emulator_window.cc:333
 msgid "Flight Stick"
-msgstr "Cần Lái Máy Bay"
+msgstr "Cần lái máy bay"
 
 #: src/xenia/app/emulator_window.cc:891
 msgid "Game &compatibility..."

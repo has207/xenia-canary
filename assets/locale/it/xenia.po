@@ -35,7 +35,7 @@ msgstr "%s (Slot %d)"
 
 #: src/xenia/ui/game_scan_progress_dialog_wx.cc:52
 msgid "%zu directories scanned   %zu files probed   %zu games found"
-msgstr "%zu directory analizzate   %zu file esaminati   %zu giochi trovati"
+msgstr "%zu cartelle analizzate   %zu file esaminati   %zu giochi trovati"
 
 #: src/xenia/app/emulator_window.cc:895
 msgid "&About..."
@@ -333,7 +333,7 @@ msgstr "Repubblica Ceca"
 
 #: src/xenia/app/emulator_window.cc:335
 msgid "Dance Pad"
-msgstr "Tappetino da Ballo"
+msgstr "Tappetino da ballo"
 
 #: src/xenia/ui/profile_editor_dialog_wx.cc:90
 msgid "Denmark"
@@ -469,7 +469,7 @@ msgstr "Schermo intero:"
 
 #: src/xenia/app/emulator_window.cc:333
 msgid "Flight Stick"
-msgstr "Joystick di Volo"
+msgstr "Joystick di volo"
 
 #: src/xenia/app/emulator_window.cc:891
 msgid "Game &compatibility..."
@@ -1140,7 +1140,7 @@ msgstr "Seleziona immagine PNG"
 #: src/xenia/ui/advanced_settings_dialog_wx.cc:332
 #: src/xenia/ui/game_config_dialog_wx.cc:117
 msgid "Select directory for %s"
-msgstr "Seleziona directory per %s"
+msgstr "Seleziona cartella per %s"
 
 #: src/xenia/ui/profile_editor_dialog_wx.cc:593
 msgid "Selected file is not a valid PNG image."
@@ -1157,7 +1157,7 @@ msgstr "Mos&tra barra strumenti"
 
 #: src/xenia/app/emulator_window.cc:805
 msgid "Show content directory..."
-msgstr "Mostra directory contenuti…"
+msgstr "Mostra cartella contenuti…"
 
 #: src/xenia/ui/profile_editor_dialog_wx.cc:179
 msgid "Silver"

@@ -35,7 +35,7 @@ msgstr "%s (slot %d)"
 
 #: src/xenia/ui/game_scan_progress_dialog_wx.cc:52
 msgid "%zu directories scanned   %zu files probed   %zu games found"
-msgstr ""
+msgstr "Prehľadaných priečinkov: %zu   preskúmaných súborov: %zu   nájdených hier: %zu"
 "Prehľadaných adresárov: %zu   preskúmaných súborov: %zu   nájdených hier: %zu"
 
 #: src/xenia/app/emulator_window.cc:895
@@ -397,7 +397,7 @@ msgstr "Nastavenia emulátora"
 
 #: src/xenia/ui/profile_editor_dialog_wx.cc:52
 msgid "English"
-msgstr "angličtina"
+msgstr "Angličtina"
 
 #: src/xenia/app/emulator_window.cc:2076 src/xenia/app/emulator_window.cc:2220
 msgid "Enter gamertag for new profile:"
@@ -458,7 +458,7 @@ msgstr "Francúzsko"
 
 #: src/xenia/ui/profile_editor_dialog_wx.cc:55
 msgid "French"
-msgstr "francúzština"
+msgstr "Francúzština"
 
 #: src/xenia/ui/quick_settings_dialog_wx.cc:281
 msgid "Full"
@@ -526,7 +526,7 @@ msgstr "Gruzínsko"
 
 #: src/xenia/ui/profile_editor_dialog_wx.cc:54
 msgid "German"
-msgstr "nemčina"
+msgstr "Nemčina"
 
 #: src/xenia/ui/profile_editor_dialog_wx.cc:89
 msgid "Germany"
@@ -651,7 +651,7 @@ msgstr "Izrael"
 
 #: src/xenia/ui/profile_editor_dialog_wx.cc:57
 msgid "Italian"
-msgstr "taliančina"
+msgstr "Taliančina"
 
 #: src/xenia/ui/profile_editor_dialog_wx.cc:115
 msgid "Italy"
@@ -667,7 +667,7 @@ msgstr "Japonsko"
 
 #: src/xenia/ui/profile_editor_dialog_wx.cc:53
 msgid "Japanese"
-msgstr "japončina"
+msgstr "Japončina"
 
 #: src/xenia/ui/profile_editor_dialog_wx.cc:117
 msgid "Jordan"
@@ -687,7 +687,7 @@ msgstr "Kórea"
 
 #: src/xenia/ui/profile_editor_dialog_wx.cc:58
 msgid "Korean"
-msgstr "kórejčina"
+msgstr "Kórejčina"
 
 #: src/xenia/ui/profile_editor_dialog_wx.cc:122
 msgid "Kuwait"
@@ -968,7 +968,7 @@ msgstr "Poľsko"
 
 #: src/xenia/ui/profile_editor_dialog_wx.cc:62
 msgid "Polish"
-msgstr "poľština"
+msgstr "Poľština"
 
 #: src/xenia/ui/profile_editor_dialog_wx.cc:149
 msgid "Portugal"
@@ -976,7 +976,7 @@ msgstr "Portugalsko"
 
 #: src/xenia/ui/profile_editor_dialog_wx.cc:60
 msgid "Portuguese"
-msgstr "portugalčina"
+msgstr "Portugalčina"
 
 #: src/xenia/ui/profile_editor_dialog_wx.cc:184
 msgid "Pro"
@@ -1074,7 +1074,7 @@ msgstr "Rumunsko"
 
 #: src/xenia/ui/profile_editor_dialog_wx.cc:63
 msgid "Russian"
-msgstr "ruština"
+msgstr "Ruština"
 
 #: src/xenia/ui/profile_editor_dialog_wx.cc:153
 msgid "Russian Federation"
@@ -1161,7 +1161,7 @@ msgstr "Silver"
 
 #: src/xenia/ui/profile_editor_dialog_wx.cc:61
 msgid "Simplified Chinese"
-msgstr "zjednodušená čínština"
+msgstr "Zjednodušená čínština"
 
 #: src/xenia/ui/profile_editor_dialog_wx.cc:156
 msgid "Singapore"
@@ -1189,7 +1189,7 @@ msgstr "Španielsko"
 
 #: src/xenia/ui/profile_editor_dialog_wx.cc:56
 msgid "Spanish"
-msgstr "španielčina"
+msgstr "Španielčina"
 
 #: src/xenia/ui/game_list_panel_wx.cc:301
 msgid "Status"
@@ -1264,7 +1264,7 @@ msgstr "Prepínače sa prejavia pri ďalšom spustení."
 
 #: src/xenia/ui/profile_editor_dialog_wx.cc:59
 msgid "Traditional Chinese"
-msgstr "tradičná čínština"
+msgstr "Tradičná čínština"
 
 #: src/xenia/ui/profile_editor_dialog_wx.cc:165
 msgid "Trinidad And Tobago"

@@ -35,7 +35,7 @@ msgstr "%s (%d. hely)"
 
 #: src/xenia/ui/game_scan_progress_dialog_wx.cc:52
 msgid "%zu directories scanned   %zu files probed   %zu games found"
-msgstr "%zu könyvtár átvizsgálva   %zu fájl ellenőrizve   %zu játék találva"
+msgstr "%zu mappa átvizsgálva   %zu fájl ellenőrizve   %zu játék találva"
 
 #: src/xenia/app/emulator_window.cc:895
 msgid "&About..."
@@ -396,7 +396,7 @@ msgstr "Emulátor beállításai"
 
 #: src/xenia/ui/profile_editor_dialog_wx.cc:52
 msgid "English"
-msgstr "angol"
+msgstr "Angol"
 
 #: src/xenia/app/emulator_window.cc:2076 src/xenia/app/emulator_window.cc:2220
 msgid "Enter gamertag for new profile:"
@@ -457,7 +457,7 @@ msgstr "Franciaország"
 
 #: src/xenia/ui/profile_editor_dialog_wx.cc:55
 msgid "French"
-msgstr "francia"
+msgstr "Francia"
 
 #: src/xenia/ui/quick_settings_dialog_wx.cc:281
 msgid "Full"
@@ -525,7 +525,7 @@ msgstr "Grúzia"
 
 #: src/xenia/ui/profile_editor_dialog_wx.cc:54
 msgid "German"
-msgstr "német"
+msgstr "Német"
 
 #: src/xenia/ui/profile_editor_dialog_wx.cc:89
 msgid "Germany"
@@ -650,7 +650,7 @@ msgstr "Izrael"
 
 #: src/xenia/ui/profile_editor_dialog_wx.cc:57
 msgid "Italian"
-msgstr "olasz"
+msgstr "Olasz"
 
 #: src/xenia/ui/profile_editor_dialog_wx.cc:115
 msgid "Italy"
@@ -666,7 +666,7 @@ msgstr "Japán"
 
 #: src/xenia/ui/profile_editor_dialog_wx.cc:53
 msgid "Japanese"
-msgstr "japán"
+msgstr "Japán"
 
 #: src/xenia/ui/profile_editor_dialog_wx.cc:117
 msgid "Jordan"
@@ -686,7 +686,7 @@ msgstr "Korea"
 
 #: src/xenia/ui/profile_editor_dialog_wx.cc:58
 msgid "Korean"
-msgstr "koreai"
+msgstr "Koreai"
 
 #: src/xenia/ui/profile_editor_dialog_wx.cc:122
 msgid "Kuwait"
@@ -969,7 +969,7 @@ msgstr "Lengyelország"
 
 #: src/xenia/ui/profile_editor_dialog_wx.cc:62
 msgid "Polish"
-msgstr "lengyel"
+msgstr "Lengyel"
 
 #: src/xenia/ui/profile_editor_dialog_wx.cc:149
 msgid "Portugal"
@@ -977,7 +977,7 @@ msgstr "Portugália"
 
 #: src/xenia/ui/profile_editor_dialog_wx.cc:60
 msgid "Portuguese"
-msgstr "portugál"
+msgstr "Portugál"
 
 #: src/xenia/ui/profile_editor_dialog_wx.cc:184
 msgid "Pro"
@@ -1077,7 +1077,7 @@ msgstr "Románia"
 
 #: src/xenia/ui/profile_editor_dialog_wx.cc:63
 msgid "Russian"
-msgstr "orosz"
+msgstr "Orosz"
 
 #: src/xenia/ui/profile_editor_dialog_wx.cc:153
 msgid "Russian Federation"
@@ -1139,7 +1139,7 @@ msgstr "PNG kép kiválasztása"
 #: src/xenia/ui/advanced_settings_dialog_wx.cc:332
 #: src/xenia/ui/game_config_dialog_wx.cc:117
 msgid "Select directory for %s"
-msgstr "Válasszon könyvtárat a következőhöz: %s"
+msgstr "Válasszon mappát a következőhöz: %s"
 
 #: src/xenia/ui/profile_editor_dialog_wx.cc:593
 msgid "Selected file is not a valid PNG image."
@@ -1164,7 +1164,7 @@ msgstr "Silver"
 
 #: src/xenia/ui/profile_editor_dialog_wx.cc:61
 msgid "Simplified Chinese"
-msgstr "egyszerűsített kínai"
+msgstr "Egyszerűsített kínai"
 
 #: src/xenia/ui/profile_editor_dialog_wx.cc:156
 msgid "Singapore"
@@ -1192,7 +1192,7 @@ msgstr "Spanyolország"
 
 #: src/xenia/ui/profile_editor_dialog_wx.cc:56
 msgid "Spanish"
-msgstr "spanyol"
+msgstr "Spanyol"
 
 #: src/xenia/ui/game_list_panel_wx.cc:301
 msgid "Status"
@@ -1266,7 +1266,7 @@ msgstr "A kapcsolók a következő indításkor lépnek érvénybe."
 
 #: src/xenia/ui/profile_editor_dialog_wx.cc:59
 msgid "Traditional Chinese"
-msgstr "hagyományos kínai"
+msgstr "Hagyományos kínai"
 
 #: src/xenia/ui/profile_editor_dialog_wx.cc:165
 msgid "Trinidad And Tobago"

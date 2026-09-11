@@ -397,7 +397,7 @@ msgstr "Nastavení emulátoru"
 
 #: src/xenia/ui/profile_editor_dialog_wx.cc:52
 msgid "English"
-msgstr "angličtina"
+msgstr "Angličtina"
 
 #: src/xenia/app/emulator_window.cc:2076 src/xenia/app/emulator_window.cc:2220
 msgid "Enter gamertag for new profile:"
@@ -458,7 +458,7 @@ msgstr "Francie"
 
 #: src/xenia/ui/profile_editor_dialog_wx.cc:55
 msgid "French"
-msgstr "francouzština"
+msgstr "Francouzština"
 
 #: src/xenia/ui/quick_settings_dialog_wx.cc:281
 msgid "Full"
@@ -526,7 +526,7 @@ msgstr "Gruzie"
 
 #: src/xenia/ui/profile_editor_dialog_wx.cc:54
 msgid "German"
-msgstr "němčina"
+msgstr "Němčina"
 
 #: src/xenia/ui/profile_editor_dialog_wx.cc:89
 msgid "Germany"
@@ -651,7 +651,7 @@ msgstr "Izrael"
 
 #: src/xenia/ui/profile_editor_dialog_wx.cc:57
 msgid "Italian"
-msgstr "italština"
+msgstr "Italština"
 
 #: src/xenia/ui/profile_editor_dialog_wx.cc:115
 msgid "Italy"
@@ -667,7 +667,7 @@ msgstr "Japonsko"
 
 #: src/xenia/ui/profile_editor_dialog_wx.cc:53
 msgid "Japanese"
-msgstr "japonština"
+msgstr "Japonština"
 
 #: src/xenia/ui/profile_editor_dialog_wx.cc:117
 msgid "Jordan"
@@ -687,7 +687,7 @@ msgstr "Korea"
 
 #: src/xenia/ui/profile_editor_dialog_wx.cc:58
 msgid "Korean"
-msgstr "korejština"
+msgstr "Korejština"
 
 #: src/xenia/ui/profile_editor_dialog_wx.cc:122
 msgid "Kuwait"
@@ -968,7 +968,7 @@ msgstr "Polsko"
 
 #: src/xenia/ui/profile_editor_dialog_wx.cc:62
 msgid "Polish"
-msgstr "polština"
+msgstr "Polština"
 
 #: src/xenia/ui/profile_editor_dialog_wx.cc:149
 msgid "Portugal"
@@ -976,7 +976,7 @@ msgstr "Portugalsko"
 
 #: src/xenia/ui/profile_editor_dialog_wx.cc:60
 msgid "Portuguese"
-msgstr "portugalština"
+msgstr "Portugalština"
 
 #: src/xenia/ui/profile_editor_dialog_wx.cc:184
 msgid "Pro"
@@ -1074,7 +1074,7 @@ msgstr "Rumunsko"
 
 #: src/xenia/ui/profile_editor_dialog_wx.cc:63
 msgid "Russian"
-msgstr "ruština"
+msgstr "Ruština"
 
 #: src/xenia/ui/profile_editor_dialog_wx.cc:153
 msgid "Russian Federation"
@@ -1161,7 +1161,7 @@ msgstr "Silver"
 
 #: src/xenia/ui/profile_editor_dialog_wx.cc:61
 msgid "Simplified Chinese"
-msgstr "zjednodušená čínština"
+msgstr "Zjednodušená čínština"
 
 #: src/xenia/ui/profile_editor_dialog_wx.cc:156
 msgid "Singapore"
@@ -1189,7 +1189,7 @@ msgstr "Španělsko"
 
 #: src/xenia/ui/profile_editor_dialog_wx.cc:56
 msgid "Spanish"
-msgstr "španělština"
+msgstr "Španělština"
 
 #: src/xenia/ui/game_list_panel_wx.cc:301
 msgid "Status"
@@ -1264,7 +1264,7 @@ msgstr "Přepínače se projeví při dalším spuštění."
 
 #: src/xenia/ui/profile_editor_dialog_wx.cc:59
 msgid "Traditional Chinese"
-msgstr "tradiční čínština"
+msgstr "Tradiční čínština"
 
 #: src/xenia/ui/profile_editor_dialog_wx.cc:165
 msgid "Trinidad And Tobago"

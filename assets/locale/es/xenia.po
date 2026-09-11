@@ -35,7 +35,7 @@ msgstr "%s (Ranura %d)"
 
 #: src/xenia/ui/game_scan_progress_dialog_wx.cc:52
 msgid "%zu directories scanned   %zu files probed   %zu games found"
-msgstr ""
+msgstr "%zu carpetas analizadas   %zu archivos comprobados   %zu juegos encontrados"
 "%zu directorios analizados   %zu archivos comprobados   %zu juegos "
 "encontrados"
 
@@ -335,7 +335,7 @@ msgstr "República Checa"
 
 #: src/xenia/app/emulator_window.cc:335
 msgid "Dance Pad"
-msgstr "Alfombra de Baile"
+msgstr "Alfombra de baile"
 
 #: src/xenia/ui/profile_editor_dialog_wx.cc:90
 msgid "Denmark"
@@ -471,7 +471,7 @@ msgstr "Pantalla completa:"
 
 #: src/xenia/app/emulator_window.cc:333
 msgid "Flight Stick"
-msgstr "Joystick de Vuelo"
+msgstr "Joystick de vuelo"
 
 #: src/xenia/app/emulator_window.cc:891
 msgid "Game &compatibility..."
@@ -1141,7 +1141,7 @@ msgstr "Seleccionar imagen PNG"
 #: src/xenia/ui/advanced_settings_dialog_wx.cc:332
 #: src/xenia/ui/game_config_dialog_wx.cc:117
 msgid "Select directory for %s"
-msgstr "Seleccionar directorio para %s"
+msgstr "Seleccionar carpeta para %s"
 
 #: src/xenia/ui/profile_editor_dialog_wx.cc:593
 msgid "Selected file is not a valid PNG image."
@@ -1158,7 +1158,7 @@ msgstr "Mos&trar barra de herramientas"
 
 #: src/xenia/app/emulator_window.cc:805
 msgid "Show content directory..."
-msgstr "Mostrar directorio de contenido…"
+msgstr "Mostrar carpeta de contenido…"
 
 #: src/xenia/ui/profile_editor_dialog_wx.cc:179
 msgid "Silver"

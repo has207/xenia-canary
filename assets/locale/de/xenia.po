@@ -35,7 +35,7 @@ msgstr "%s (Slot %d)"
 
 #: src/xenia/ui/game_scan_progress_dialog_wx.cc:52
 msgid "%zu directories scanned   %zu files probed   %zu games found"
-msgstr ""
+msgstr "%zu Ordner durchsucht   %zu Dateien geprüft   %zu Spiele gefunden"
 "%zu Verzeichnisse durchsucht   %zu Dateien geprüft   %zu Spiele gefunden"
 
 #: src/xenia/app/emulator_window.cc:895
@@ -1139,7 +1139,7 @@ msgstr "PNG-Bild auswählen"
 #: src/xenia/ui/advanced_settings_dialog_wx.cc:332
 #: src/xenia/ui/game_config_dialog_wx.cc:117
 msgid "Select directory for %s"
-msgstr "Verzeichnis für %s auswählen"
+msgstr "Ordner für %s auswählen"
 
 #: src/xenia/ui/profile_editor_dialog_wx.cc:593
 msgid "Selected file is not a valid PNG image."
@@ -1156,7 +1156,7 @@ msgstr "Symbolleis&te anzeigen"
 
 #: src/xenia/app/emulator_window.cc:805
 msgid "Show content directory..."
-msgstr "Inhaltsverzeichnis anzeigen…"
+msgstr "Inhaltsordner anzeigen…"
 
 #: src/xenia/ui/profile_editor_dialog_wx.cc:179
 msgid "Silver"

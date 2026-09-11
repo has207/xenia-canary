@@ -36,7 +36,7 @@ msgstr "%s (slot %d)"
 
 #: src/xenia/ui/game_scan_progress_dialog_wx.cc:52
 msgid "%zu directories scanned   %zu files probed   %zu games found"
-msgstr ""
+msgstr "przeskanowanych folderów: %zu   sprawdzonych plików: %zu   znalezionych gier: %zu"
 "przeskanowanych katalogów: %zu   sprawdzonych plików: %zu   znalezionych "
 "gier: %zu"
 
@@ -399,7 +399,7 @@ msgstr "Ustawienia emulatora"
 
 #: src/xenia/ui/profile_editor_dialog_wx.cc:52
 msgid "English"
-msgstr "angielski"
+msgstr "Angielski"
 
 #: src/xenia/app/emulator_window.cc:2076 src/xenia/app/emulator_window.cc:2220
 msgid "Enter gamertag for new profile:"
@@ -460,7 +460,7 @@ msgstr "Francja"
 
 #: src/xenia/ui/profile_editor_dialog_wx.cc:55
 msgid "French"
-msgstr "francuski"
+msgstr "Francuski"
 
 #: src/xenia/ui/quick_settings_dialog_wx.cc:281
 msgid "Full"
@@ -528,7 +528,7 @@ msgstr "Gruzja"
 
 #: src/xenia/ui/profile_editor_dialog_wx.cc:54
 msgid "German"
-msgstr "niemiecki"
+msgstr "Niemiecki"
 
 #: src/xenia/ui/profile_editor_dialog_wx.cc:89
 msgid "Germany"
@@ -653,7 +653,7 @@ msgstr "Izrael"
 
 #: src/xenia/ui/profile_editor_dialog_wx.cc:57
 msgid "Italian"
-msgstr "włoski"
+msgstr "Włoski"
 
 #: src/xenia/ui/profile_editor_dialog_wx.cc:115
 msgid "Italy"
@@ -669,7 +669,7 @@ msgstr "Japonia"
 
 #: src/xenia/ui/profile_editor_dialog_wx.cc:53
 msgid "Japanese"
-msgstr "japoński"
+msgstr "Japoński"
 
 #: src/xenia/ui/profile_editor_dialog_wx.cc:117
 msgid "Jordan"
@@ -689,7 +689,7 @@ msgstr "Korea"
 
 #: src/xenia/ui/profile_editor_dialog_wx.cc:58
 msgid "Korean"
-msgstr "koreański"
+msgstr "Koreański"
 
 #: src/xenia/ui/profile_editor_dialog_wx.cc:122
 msgid "Kuwait"
@@ -972,7 +972,7 @@ msgstr "Polska"
 
 #: src/xenia/ui/profile_editor_dialog_wx.cc:62
 msgid "Polish"
-msgstr "polski"
+msgstr "Polski"
 
 #: src/xenia/ui/profile_editor_dialog_wx.cc:149
 msgid "Portugal"
@@ -980,7 +980,7 @@ msgstr "Portugalia"
 
 #: src/xenia/ui/profile_editor_dialog_wx.cc:60
 msgid "Portuguese"
-msgstr "portugalski"
+msgstr "Portugalski"
 
 #: src/xenia/ui/profile_editor_dialog_wx.cc:184
 msgid "Pro"
@@ -1078,7 +1078,7 @@ msgstr "Rumunia"
 
 #: src/xenia/ui/profile_editor_dialog_wx.cc:63
 msgid "Russian"
-msgstr "rosyjski"
+msgstr "Rosyjski"
 
 #: src/xenia/ui/profile_editor_dialog_wx.cc:153
 msgid "Russian Federation"
@@ -1140,7 +1140,7 @@ msgstr "Wybierz obraz PNG"
 #: src/xenia/ui/advanced_settings_dialog_wx.cc:332
 #: src/xenia/ui/game_config_dialog_wx.cc:117
 msgid "Select directory for %s"
-msgstr "Wybierz katalog dla %s"
+msgstr "Wybierz folder dla %s"
 
 #: src/xenia/ui/profile_editor_dialog_wx.cc:593
 msgid "Selected file is not a valid PNG image."
@@ -1157,7 +1157,7 @@ msgstr "&Pokaż pasek narzędzi"
 
 #: src/xenia/app/emulator_window.cc:805
 msgid "Show content directory..."
-msgstr "Pokaż katalog zawartości…"
+msgstr "Pokaż folder zawartości…"
 
 #: src/xenia/ui/profile_editor_dialog_wx.cc:179
 msgid "Silver"
@@ -1165,7 +1165,7 @@ msgstr "Silver"
 
 #: src/xenia/ui/profile_editor_dialog_wx.cc:61
 msgid "Simplified Chinese"
-msgstr "chiński uproszczony"
+msgstr "Chiński uproszczony"
 
 #: src/xenia/ui/profile_editor_dialog_wx.cc:156
 msgid "Singapore"
@@ -1193,7 +1193,7 @@ msgstr "Hiszpania"
 
 #: src/xenia/ui/profile_editor_dialog_wx.cc:56
 msgid "Spanish"
-msgstr "hiszpański"
+msgstr "Hiszpański"
 
 #: src/xenia/ui/game_list_panel_wx.cc:301
 msgid "Status"
@@ -1268,7 +1268,7 @@ msgstr "Przełączniki zostaną zastosowane przy następnym uruchomieniu."
 
 #: src/xenia/ui/profile_editor_dialog_wx.cc:59
 msgid "Traditional Chinese"
-msgstr "chiński tradycyjny"
+msgstr "Chiński tradycyjny"
 
 #: src/xenia/ui/profile_editor_dialog_wx.cc:165
 msgid "Trinidad And Tobago"

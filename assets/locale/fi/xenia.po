@@ -35,7 +35,7 @@ msgstr "%s (paikka %d)"
 
 #: src/xenia/ui/game_scan_progress_dialog_wx.cc:52
 msgid "%zu directories scanned   %zu files probed   %zu games found"
-msgstr "%zu hakemistoa tutkittu   %zu tiedostoa tarkistettu   %zu peliä löytyi"
+msgstr "%zu kansiota tutkittu   %zu tiedostoa tarkistettu   %zu peliä löytyi"
 
 #: src/xenia/app/emulator_window.cc:895
 msgid "&About..."
@@ -396,7 +396,7 @@ msgstr "Emulaattorin asetukset"
 
 #: src/xenia/ui/profile_editor_dialog_wx.cc:52
 msgid "English"
-msgstr "englanti"
+msgstr "Englanti"
 
 #: src/xenia/app/emulator_window.cc:2076 src/xenia/app/emulator_window.cc:2220
 msgid "Enter gamertag for new profile:"
@@ -457,7 +457,7 @@ msgstr "Ranska"
 
 #: src/xenia/ui/profile_editor_dialog_wx.cc:55
 msgid "French"
-msgstr "ranska"
+msgstr "Ranska"
 
 #: src/xenia/ui/quick_settings_dialog_wx.cc:281
 msgid "Full"
@@ -525,7 +525,7 @@ msgstr "Georgia"
 
 #: src/xenia/ui/profile_editor_dialog_wx.cc:54
 msgid "German"
-msgstr "saksa"
+msgstr "Saksa"
 
 #: src/xenia/ui/profile_editor_dialog_wx.cc:89
 msgid "Germany"
@@ -650,7 +650,7 @@ msgstr "Israel"
 
 #: src/xenia/ui/profile_editor_dialog_wx.cc:57
 msgid "Italian"
-msgstr "italia"
+msgstr "Italia"
 
 #: src/xenia/ui/profile_editor_dialog_wx.cc:115
 msgid "Italy"
@@ -666,7 +666,7 @@ msgstr "Japani"
 
 #: src/xenia/ui/profile_editor_dialog_wx.cc:53
 msgid "Japanese"
-msgstr "japani"
+msgstr "Japani"
 
 #: src/xenia/ui/profile_editor_dialog_wx.cc:117
 msgid "Jordan"
@@ -686,7 +686,7 @@ msgstr "Korea"
 
 #: src/xenia/ui/profile_editor_dialog_wx.cc:58
 msgid "Korean"
-msgstr "korea"
+msgstr "Korea"
 
 #: src/xenia/ui/profile_editor_dialog_wx.cc:122
 msgid "Kuwait"
@@ -969,7 +969,7 @@ msgstr "Puola"
 
 #: src/xenia/ui/profile_editor_dialog_wx.cc:62
 msgid "Polish"
-msgstr "puola"
+msgstr "Puola"
 
 #: src/xenia/ui/profile_editor_dialog_wx.cc:149
 msgid "Portugal"
@@ -977,7 +977,7 @@ msgstr "Portugali"
 
 #: src/xenia/ui/profile_editor_dialog_wx.cc:60
 msgid "Portuguese"
-msgstr "portugali"
+msgstr "Portugali"
 
 #: src/xenia/ui/profile_editor_dialog_wx.cc:184
 msgid "Pro"
@@ -1075,7 +1075,7 @@ msgstr "Romania"
 
 #: src/xenia/ui/profile_editor_dialog_wx.cc:63
 msgid "Russian"
-msgstr "venäjä"
+msgstr "Venäjä"
 
 #: src/xenia/ui/profile_editor_dialog_wx.cc:153
 msgid "Russian Federation"
@@ -1137,7 +1137,7 @@ msgstr "Valitse PNG-kuva"
 #: src/xenia/ui/advanced_settings_dialog_wx.cc:332
 #: src/xenia/ui/game_config_dialog_wx.cc:117
 msgid "Select directory for %s"
-msgstr "Valitse hakemisto kohteelle %s"
+msgstr "Valitse kansio kohteelle %s"
 
 #: src/xenia/ui/profile_editor_dialog_wx.cc:593
 msgid "Selected file is not a valid PNG image."
@@ -1154,7 +1154,7 @@ msgstr "Näy&tä työkalupalkki"
 
 #: src/xenia/app/emulator_window.cc:805
 msgid "Show content directory..."
-msgstr "Näytä sisältöhakemisto…"
+msgstr "Näytä sisältökansio…"
 
 #: src/xenia/ui/profile_editor_dialog_wx.cc:179
 msgid "Silver"
@@ -1162,7 +1162,7 @@ msgstr "Silver"
 
 #: src/xenia/ui/profile_editor_dialog_wx.cc:61
 msgid "Simplified Chinese"
-msgstr "yksinkertaistettu kiina"
+msgstr "Yksinkertaistettu kiina"
 
 #: src/xenia/ui/profile_editor_dialog_wx.cc:156
 msgid "Singapore"
@@ -1190,7 +1190,7 @@ msgstr "Espanja"
 
 #: src/xenia/ui/profile_editor_dialog_wx.cc:56
 msgid "Spanish"
-msgstr "espanja"
+msgstr "Espanja"
 
 #: src/xenia/ui/game_list_panel_wx.cc:301
 msgid "Status"
@@ -1265,7 +1265,7 @@ msgstr "Kytkimet tulevat voimaan seuraavalla käynnistyskerralla."
 
 #: src/xenia/ui/profile_editor_dialog_wx.cc:59
 msgid "Traditional Chinese"
-msgstr "perinteinen kiina"
+msgstr "Perinteinen kiina"
 
 #: src/xenia/ui/profile_editor_dialog_wx.cc:165
 msgid "Trinidad And Tobago"

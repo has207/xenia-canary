@@ -294,7 +294,7 @@ msgstr "Gestionnaire de configuration *"
 
 #: src/xenia/ui/install_progress_dialog_wx.cc:165
 msgid "Content Type: %s"
-msgstr "Type de contenu: %s"
+msgstr "Type de contenu : %s"
 
 #: src/xenia/ui/profile_editor_dialog_wx.cc:87
 msgid "Costa Rica"
@@ -307,7 +307,7 @@ msgstr "Impossible de décoder l'image sélectionnée."
 #: src/xenia/ui/profile_editor_dialog_wx.cc:470
 #: src/xenia/ui/quick_settings_dialog_wx.cc:317
 msgid "Country:"
-msgstr "Pays:"
+msgstr "Pays :"
 
 #: src/xenia/app/emulator_window.cc:2073
 msgid "Create new..."
@@ -333,7 +333,7 @@ msgstr "République tchèque"
 
 #: src/xenia/app/emulator_window.cc:335
 msgid "Dance Pad"
-msgstr "Tapis de Danse"
+msgstr "Tapis de danse"
 
 #: src/xenia/ui/profile_editor_dialog_wx.cc:90
 msgid "Denmark"
@@ -360,7 +360,7 @@ msgstr "Déconnecter"
 
 #: src/xenia/ui/quick_settings_dialog_wx.cc:297
 msgid "Discord Rich Presence:"
-msgstr "Discord Rich Presence:"
+msgstr "Discord Rich Presence :"
 
 #: src/xenia/ui/profile_editor_dialog_wx.cc:91
 msgid "Dominican Republic"
@@ -388,7 +388,7 @@ msgstr "Salvador"
 
 #: src/xenia/ui/quick_settings_dialog_wx.cc:227
 msgid "Emulated Display Refresh Rate:"
-msgstr "Fréquence de rafraîchissement émulée:"
+msgstr "Fréquence de rafraîchissement émulée :"
 
 #: src/xenia/ui/quick_settings_dialog_wx.cc:79
 msgid "Emulator Settings"
@@ -400,7 +400,7 @@ msgstr "Anglais"
 
 #: src/xenia/app/emulator_window.cc:2076 src/xenia/app/emulator_window.cc:2220
 msgid "Enter gamertag for new profile:"
-msgstr "Entrez le Gamertag du nouveau profil:"
+msgstr "Entrez le Gamertag du nouveau profil :"
 
 #: src/xenia/ui/profile_editor_dialog_wx.cc:94
 msgid "Estonia"
@@ -436,7 +436,7 @@ msgid ""
 "File not found:\n"
 "%s"
 msgstr ""
-"Fichier introuvable:\n"
+"Fichier introuvable :\n"
 "%s"
 
 #: src/xenia/ui/game_config_dialog_wx.cc:193
@@ -449,7 +449,7 @@ msgstr "Finlande"
 
 #: src/xenia/ui/quick_settings_dialog_wx.cc:199
 msgid "Framerate Limit (0 = unlimited):"
-msgstr "Limite d'images par seconde (0 = illimité):"
+msgstr "Limite d'images par seconde (0 = illimité) :"
 
 #: src/xenia/ui/profile_editor_dialog_wx.cc:99
 msgid "France"
@@ -465,11 +465,11 @@ msgstr "Complet"
 
 #: src/xenia/ui/quick_settings_dialog_wx.cc:237
 msgid "Full Screen:"
-msgstr "Plein écran:"
+msgstr "Plein écran :"
 
 #: src/xenia/app/emulator_window.cc:333
 msgid "Flight Stick"
-msgstr "Joystick de Vol"
+msgstr "Joystick de vol"
 
 #: src/xenia/app/emulator_window.cc:891
 msgid "Game &compatibility..."
@@ -477,7 +477,7 @@ msgstr "&Compatibilité des jeux…"
 
 #: src/xenia/ui/advanced_settings_dialog_wx.cc:277
 msgid "GameMode not in PATH; install to enable."
-msgstr "GameMode introuvable dans le PATH; installez-le pour l'activer."
+msgstr "GameMode introuvable dans le PATH ; installez-le pour l'activer."
 
 #: src/xenia/app/emulator_window.cc:345
 msgid "Gamepad"
@@ -489,19 +489,19 @@ msgstr "Entre en jeu"
 
 #: src/xenia/ui/profile_editor_dialog_wx.cc:458
 msgid "Gamer Bio:"
-msgstr "Biographie du joueur:"
+msgstr "Biographie du joueur :"
 
 #: src/xenia/ui/profile_editor_dialog_wx.cc:451
 msgid "Gamer Motto:"
-msgstr "Devise du joueur:"
+msgstr "Devise du joueur :"
 
 #: src/xenia/ui/profile_editor_dialog_wx.cc:445
 msgid "Gamer Name:"
-msgstr "Nom du joueur:"
+msgstr "Nom du joueur :"
 
 #: src/xenia/ui/profile_editor_dialog_wx.cc:512
 msgid "Gamer Zone:"
-msgstr "Zone du joueur:"
+msgstr "Zone du joueur :"
 
 #: src/xenia/ui/profile_editor_dialog_wx.cc:276
 msgid "Gamercard Editor"
@@ -517,7 +517,7 @@ msgstr "Score de joueur"
 
 #: src/xenia/ui/profile_editor_dialog_wx.cc:434
 msgid "Gamertag:"
-msgstr "Gamertag:"
+msgstr "Gamertag :"
 
 #: src/xenia/ui/profile_editor_dialog_wx.cc:101
 msgid "Georgia"
@@ -541,7 +541,7 @@ msgstr "Graphismes"
 
 #: src/xenia/ui/quick_settings_dialog_wx.cc:163
 msgid "Graphics Backend:"
-msgstr "Moteur graphique:"
+msgstr "Moteur graphique :"
 
 #: src/xenia/ui/profile_editor_dialog_wx.cc:100
 msgid "Great Britain"
@@ -599,7 +599,7 @@ msgstr "Échec de l'importation"
 
 #: src/xenia/ui/quick_settings_dialog_wx.cc:305
 msgid "In-Process Title Relaunch:"
-msgstr "Relancement de titre en cours de processus:"
+msgstr "Relancement de titre en cours de processus :"
 
 #: src/xenia/ui/profile_editor_dialog_wx.cc:111
 msgid "India"
@@ -611,7 +611,7 @@ msgstr "Indonésie"
 
 #: src/xenia/ui/install_progress_dialog_wx.cc:173
 msgid "Installation Path: "
-msgstr "Chemin d'installation: "
+msgstr "Chemin d'installation : "
 
 #: src/xenia/ui/install_progress_dialog_wx.cc:45
 msgid "Installation Progress"
@@ -701,7 +701,7 @@ msgstr "Kirghizistan"
 #: src/xenia/ui/profile_editor_dialog_wx.cc:464
 #: src/xenia/ui/quick_settings_dialog_wx.cc:311
 msgid "Language:"
-msgstr "Langue:"
+msgstr "Langue :"
 
 #: src/xenia/ui/game_list_panel_wx.cc:306
 msgid "Last Played"
@@ -722,7 +722,7 @@ msgstr "Liban"
 
 #: src/xenia/ui/quick_settings_dialog_wx.cc:242
 msgid "Letterbox:"
-msgstr "Letterbox:"
+msgstr "Letterbox :"
 
 #: src/xenia/ui/profile_editor_dialog_wx.cc:129
 msgid "Libya"
@@ -730,7 +730,7 @@ msgstr "Libye"
 
 #: src/xenia/ui/quick_settings_dialog_wx.cc:292
 msgid "License:"
-msgstr "Licence:"
+msgstr "Licence :"
 
 #: src/xenia/ui/profile_editor_dialog_wx.cc:125
 msgid "Liechtenstein"
@@ -790,12 +790,12 @@ msgid ""
 "settings need a relaunch to take effect."
 msgstr ""
 "Gérer la configuration de l'émulateur. Les modifications sont enregistrées "
-"dans config.toml; certains paramètres nécessitent un redémarrage pour être "
+"dans config.toml ; certains paramètres nécessitent un redémarrage pour être "
 "appliqués."
 
 #: src/xenia/ui/advanced_settings_dialog_wx.cc:273
 msgid "MangoHUD not in PATH; install to enable."
-msgstr "MangoHUD introuvable dans le PATH; installez-le pour l'activer."
+msgstr "MangoHUD introuvable dans le PATH ; installez-le pour l'activer."
 
 #: src/xenia/ui/game_list_panel_wx.cc:1044
 msgid "Master"
@@ -828,7 +828,7 @@ msgstr "Couper le son"
 
 #: src/xenia/ui/install_progress_dialog_wx.cc:172
 msgid "Name: %s"
-msgstr "Nom: %s"
+msgstr "Nom : %s"
 
 #: src/xenia/ui/quick_settings_dialog_wx.cc:175
 msgid "Native"
@@ -894,7 +894,7 @@ msgstr "Oman"
 
 #: src/xenia/ui/profile_editor_dialog_wx.cc:500
 msgid "Online Domain:"
-msgstr "Domaine en ligne:"
+msgstr "Domaine en ligne :"
 
 #: src/xenia/ui/profile_editor_dialog_wx.cc:476
 msgid "Online Profile Settings"
@@ -902,7 +902,7 @@ msgstr "Paramètres du profil en ligne"
 
 #: src/xenia/ui/profile_editor_dialog_wx.cc:495
 msgid "Online XUID:"
-msgstr "XUID en ligne:"
+msgstr "XUID en ligne :"
 
 #: src/xenia/app/emulator_window.cc:950
 msgid "Open"
@@ -1052,7 +1052,7 @@ msgstr "Supprimer cette substitution"
 
 #: src/xenia/ui/quick_settings_dialog_wx.cc:169
 msgid "Rendering:"
-msgstr "Rendu:"
+msgstr "Rendu :"
 
 #: src/xenia/ui/advanced_settings_dialog_wx.cc:481
 #: src/xenia/ui/quick_settings_dialog_wx.cc:584
@@ -1071,7 +1071,7 @@ msgstr "Réinitialiser par défaut"
 
 #: src/xenia/ui/quick_settings_dialog_wx.cc:185
 msgid "Resolution Scale:"
-msgstr "Échelle de résolution:"
+msgstr "Échelle de résolution :"
 
 #: src/xenia/ui/profile_editor_dialog_wx.cc:152
 msgid "Romania"
@@ -1141,7 +1141,7 @@ msgstr "Sélectionner une image PNG"
 #: src/xenia/ui/advanced_settings_dialog_wx.cc:332
 #: src/xenia/ui/game_config_dialog_wx.cc:117
 msgid "Select directory for %s"
-msgstr "Sélectionner le répertoire pour %s"
+msgstr "Sélectionner le dossier pour %s"
 
 #: src/xenia/ui/profile_editor_dialog_wx.cc:593
 msgid "Selected file is not a valid PNG image."
@@ -1158,7 +1158,7 @@ msgstr "Afficher la barre d'ou&tils"
 
 #: src/xenia/app/emulator_window.cc:805
 msgid "Show content directory..."
-msgstr "Afficher le répertoire du contenu…"
+msgstr "Afficher le dossier du contenu…"
 
 #: src/xenia/ui/profile_editor_dialog_wx.cc:179
 msgid "Silver"
@@ -1202,7 +1202,7 @@ msgstr "Statut"
 
 #: src/xenia/ui/install_progress_dialog_wx.cc:181
 msgid "Status: %s"
-msgstr "Statut: %s"
+msgstr "Statut : %s"
 
 #: src/xenia/app/emulator_window.cc:1713
 msgid "Stop the running title and return to the list"
@@ -1210,7 +1210,7 @@ msgstr "Arrêter le titre en cours et retourner à la liste"
 
 #: src/xenia/ui/profile_editor_dialog_wx.cc:520
 msgid "Subscription Tier:"
-msgstr "Niveau d'abonnement:"
+msgstr "Niveau d'abonnement :"
 
 #: src/xenia/ui/install_progress_dialog_wx.cc:219
 msgid "Successfully installed %d package(s)."
@@ -1346,7 +1346,7 @@ msgstr "Ouzbékistan"
 
 #: src/xenia/ui/quick_settings_dialog_wx.cc:232
 msgid "VSync:"
-msgstr "VSync:"
+msgstr "VSync :"
 
 #: src/xenia/ui/profile_editor_dialog_wx.cc:171
 msgid "Venezuela"
