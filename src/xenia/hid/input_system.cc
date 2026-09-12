@@ -174,7 +174,11 @@ X_RESULT InputSystem::GetStateForUI(uint32_t user_index, uint32_t flags,
     return X_ERROR_DEVICE_NOT_CONNECTED;
   }
   auto& binding = slot_bindings_[user_index];
-  if (binding.driver && (flags & binding.driver->GetInputType()) != 0) {
+  if (binding.driver) {
+    // Wrong device type for this slot is not a disconnect.
+    if ((flags & binding.driver->GetInputType()) == 0) {
+      return X_ERROR_DEVICE_NOT_CONNECTED;
+    }
     X_RESULT r = binding.driver->GetState(binding.driver_slot, out_state);
     if (r == X_ERROR_SUCCESS) {
       UpdateUsedSlot(binding.driver, user_index, true);
