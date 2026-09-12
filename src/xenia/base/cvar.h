@@ -749,8 +749,9 @@ class ConfigVarUpdate : public IConfigVarUpdate {
       "updating config variable defaults.");                                  \
   namespace cv {                                                              \
   static const cvar::ConfigVarUpdateFromAny                                   \
-      update_##name_##year_##month_##day_##utc_hour(cv_##name, year, month,   \
-                                                    day, utc_hour);           \
+      update_##name##_##year##_##month##_##day##_##utc_hour(cv_##name, year,  \
+                                                            month, day,       \
+                                                            utc_hour);        \
   }
 
 #define UPDATE_CVar(name, year, month, day, utc_hour, old_default_value, type) \
@@ -763,9 +764,8 @@ class ConfigVarUpdate : public IConfigVarUpdate {
       "updating config variable defaults.");                                   \
   namespace cv {                                                               \
   static const cvar::ConfigVarUpdate<type>                                     \
-      update_##name_##year_##month_##day_##utc_hour(cv_##name, year, month,    \
-                                                    day, utc_hour,             \
-                                                    old_default_value);        \
+      update_##name##_##year##_##month##_##day##_##utc_hour(                   \
+          cv_##name, year, month, day, utc_hour, old_default_value);           \
   }
 
 #define UPDATE_from_bool(name, year, month, day, utc_hour, old_default_value) \
