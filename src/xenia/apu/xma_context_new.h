@@ -35,6 +35,8 @@ struct kPacketInfo {
   uint8_t frame_count_;
   uint8_t current_frame_;
   uint32_t current_frame_size_;
+  // First frame starting at or after the requested offset.
+  uint32_t current_frame_offset_;
 
   const bool isLastFrameInPacket() const {
     return frame_count_ == 0 || current_frame_ == frame_count_ - 1;
