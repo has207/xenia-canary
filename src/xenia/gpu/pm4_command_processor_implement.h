@@ -689,11 +689,15 @@ bool COMMAND_PROCESSOR::ExecutePacketType3(uint32_t packet) XE_RESTRICT {
           trace_writer_.Close();
           // The guest output now holds exactly the frame that was traced.
           WriteTraceFrameScreenshot();
+        } else if (trace_state_ == TraceState::kDisabled) {
+          trace_writer_.Close();
         }
       } else if (trace_state_ == TraceState::kSingleFrame) {
         // New trace request - we only start tracing at the beginning of a
         // frame.
-        uint32_t title_id = kernel_state_->GetExecutableModule()->title_id();
+        auto executable_module = kernel_state_->GetExecutableModule();
+        uint32_t title_id =
+            executable_module ? executable_module->title_id() : 0;
         auto file_name = fmt::format("{:08X}_{}.xtr", title_id, counter_ - 1);
         auto path = trace_frame_path_ / file_name;
         trace_writer_.Open(path, title_id);

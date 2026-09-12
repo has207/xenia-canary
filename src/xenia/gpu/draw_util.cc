@@ -20,6 +20,16 @@
 #include "xenia/ui/graphics_util.h"
 
 // Very prominent in 545407F2.
+DEFINE_bool(log_draws, false,
+            "Log every draw with its primitive type, vertex count and "
+            "shader hashes.",
+            "GPU.Debug");
+
+DEFINE_bool(log_resolves, false,
+            "Log every resolve copy with its destination, size and sample "
+            "count.",
+            "GPU.Debug");
+
 DEFINE_bool(
     resolve_resolution_scale_fill_half_pixel_offset, true,
     "When using resolution scaling, apply the hack that stretches the first "

@@ -54,6 +54,16 @@ void TracePlayer::SeekFrame(int target_frame) {
             TracePlaybackMode::kBreakOnSwap, false);
 }
 
+void TracePlayer::PlayFramePrefix(int target_frame, int target_command) {
+  current_frame_index_ = target_frame;
+  auto frame = current_frame();
+  current_command_index_ = target_command;
+  const auto& command = frame->commands[target_command];
+  assert_true(frame->start_ptr <= command.end_ptr);
+  PlayTrace(frame->start_ptr, command.end_ptr - frame->start_ptr,
+            TracePlaybackMode::kBreakOnSwap, false);
+}
+
 void TracePlayer::SeekCommand(int target_command) {
   if (current_command_index_ == target_command) {
     return;
@@ -162,6 +172,8 @@ void TracePlayer::PlayTraceOnThread(const uint8_t* trace_data,
         }
         if (pending_break) {
           playing_trace_ = false;
+          // Break-on-swap ends playback normally, and the event is auto-reset.
+          playback_event_->Set();
           return;
         }
         break;

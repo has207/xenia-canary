@@ -10,10 +10,12 @@
 #include "xenia/gpu/render_target_cache.h"
 
 #include <cmath>
+#include <cstdio>
 #include <cstring>
 
 #include "xenia/base/assert.h"
 #include "xenia/base/cvar.h"
+#include "xenia/base/filesystem.h"
 #include "xenia/base/logging.h"
 #include "xenia/base/math.h"
 #include "xenia/gpu/draw_util.h"
@@ -22,6 +24,10 @@
 #include "xenia/gpu/trace_writer.h"
 #include "xenia/gpu/xenos.h"
 
+DEFINE_bool(log_transfers, false,
+            "Log every EDRAM ownership transfer with its source and "
+            "destination render target and tile range.",
+            "GPU.Debug");
 DEFINE_bool(
     debug_msaa_2x_as_4x, false,
     "Use 4x MSAA with 2 samples instead of native 2x MSAA when available. "
@@ -1560,6 +1566,25 @@ void RenderTargetCache::InitializeTraceCompleteDownloads() {
   EndEdramSnapshotReadback();
 }
 
+bool RenderTargetCache::WriteEdramSnapshotToFile(
+    const std::filesystem::path& path) {
+  const void* snapshot = MapEdramSnapshotReadback();
+  bool written = false;
+  if (snapshot) {
+    FILE* file = xe::filesystem::OpenFile(path, "wb");
+    if (file) {
+      written = fwrite(snapshot, 1, xenos::kEdramSizeBytes, file) ==
+                xenos::kEdramSizeBytes;
+      fclose(file);
+    }
+  }
+  if (!written) {
+    XELOGE("Failed to write the EDRAM snapshot to {}", xe::path_to_utf8(path));
+  }
+  EndEdramSnapshotReadback();
+  return written;
+}
+
 RenderTargetCache::RenderTarget*
 RenderTargetCache::PrepareFullEdram1280xRenderTargetForSnapshotRestoration(
     xenos::ColorRenderTargetFormat color_format) {
@@ -1683,6 +1708,39 @@ bool RenderTargetCache::IsTransferValueConverted7e3And8888(
     }
   }
   return false;
+}
+
+void RenderTargetCache::LogTransfers(
+    uint32_t render_target_count, RenderTarget* const* render_targets,
+    const std::vector<Transfer>* render_target_transfers,
+    const Transfer::Rectangle* resolve_clear_rectangle) const {
+  if (!cvars::log_transfers) {
+    return;
+  }
+  if (resolve_clear_rectangle) {
+    XELOGI("log_transfers: resolve clear {}x{} at {},{}",
+           resolve_clear_rectangle->width_pixels,
+           resolve_clear_rectangle->height_pixels,
+           resolve_clear_rectangle->x_pixels,
+           resolve_clear_rectangle->y_pixels);
+  }
+  for (uint32_t i = 0; i < render_target_count; ++i) {
+    const RenderTarget* dest = render_targets[i];
+    if (!dest) {
+      continue;
+    }
+    std::string dest_name = dest->key().GetDebugName();
+    for (const Transfer& transfer : render_target_transfers[i]) {
+      std::string host_depth_name;
+      if (transfer.host_depth_source) {
+        host_depth_name = ", host depth from " +
+                          transfer.host_depth_source->key().GetDebugName();
+      }
+      XELOGI("log_transfers: slot {}, {} <= {}, tiles [{}, {}){}", i, dest_name,
+             transfer.source->key().GetDebugName(), transfer.start_tiles,
+             transfer.end_tiles, host_depth_name);
+    }
+  }
 }
 
 bool RenderTargetCache::WouldOwnershipChangeRequireTransfers(

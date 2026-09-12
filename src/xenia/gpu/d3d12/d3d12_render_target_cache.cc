@@ -1203,7 +1203,7 @@ bool D3D12RenderTargetCache::Resolve(const Memory& memory,
   // Copying.
   bool copied = false;
   if (resolve_info.copy_dest_extent_length) {
-    if (command_processor_.debug_markers_enabled()) {
+    if (command_processor_.debug_markers_enabled() || cvars::log_resolves) {
       char label[draw_util::kDebugMarkerLabelMaxLength];
       draw_util::FormatResolveCopyDebugMarker(label, sizeof(label),
                                               resolve_info);
@@ -1373,7 +1373,7 @@ bool D3D12RenderTargetCache::Resolve(const Memory& memory,
   bool clear_depth = resolve_info.IsClearingDepth();
   bool clear_color = resolve_info.IsClearingColor();
   if (clear_depth || clear_color) {
-    if (command_processor_.debug_markers_enabled()) {
+    if (command_processor_.debug_markers_enabled() || cvars::log_resolves) {
       char label[draw_util::kDebugMarkerLabelMaxLength];
       draw_util::FormatResolveClearDebugMarker(
           label, sizeof(label), resolve_info, clear_depth, clear_color);
@@ -2298,6 +2298,9 @@ void D3D12RenderTargetCache::PerformTransfersAndResolveClears(
   if (!has_transfers) {
     return;
   }
+
+  LogTransfers(render_target_count, render_targets, render_target_transfers,
+               resolve_clear_needed ? resolve_clear_rectangle : nullptr);
 
   command_processor_.PushDebugMarker("PerformTransfersAndResolveClears");
 

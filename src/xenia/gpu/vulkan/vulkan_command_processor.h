@@ -381,6 +381,7 @@ class VulkanCommandProcessor final : public CommandProcessor {
   bool IssueCopy() override;
 
   void InitializeTrace() override;
+  bool DumpEdramSnapshotToFile(const std::filesystem::path& path) override;
 
  private:
   struct CommandBuffer {

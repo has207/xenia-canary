@@ -591,6 +591,13 @@ class TextureCache {
   // 4D5307E6 also expects replicated components in k_8 sprites.
   // DXN is read as RG in 4D5307E6, but as RA in 415607E6.
   // TODO(Triang3l): Find out the correct contents of unused texture components.
+  // Logs the sampler a backend built for one fetch constant.
+  void LogSamplerParameters(uint32_t fetch_constant, uint32_t packed) const;
+
+  // Logs one texture upload with its guest key.
+  void LogTextureLoad(const TextureKey& key, uint32_t load_shader,
+                      bool load_base, bool load_mips) const;
+
   virtual uint32_t GetHostFormatSwizzle(TextureKey key) const = 0;
 
   virtual uint32_t GetMaxHostTextureWidthHeight(

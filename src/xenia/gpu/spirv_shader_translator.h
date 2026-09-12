@@ -1315,6 +1315,18 @@ class SpirvShaderTranslator : public ShaderTranslator {
   spv::Id var_main_tfetch_gradients_v_;
   // float4[register_count()].
   spv::Id var_main_registers_;
+
+  // Guest instruction bisect, snapshotting a register to color 0.
+  bool BisectTargetsCurrentShader() const;
+  bool BisectSkipsInstruction();
+  void BisectSnapshotAfterInstruction();
+  void BisectStoreSnapshot();
+  void BisectOverrideColorOutput();
+  uint32_t bisect_instruction_index_;
+  uint32_t bisect_current_instruction_;
+  bool bisect_snapshot_emitted_;
+  // float4 holding the watched register at the chosen instruction.
+  spv::Id var_main_bisect_snapshot_;
   // Memory export variables are created only when needed.
   // float4.
   spv::Id var_main_memexport_address_;

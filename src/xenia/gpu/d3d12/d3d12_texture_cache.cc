@@ -1002,6 +1002,8 @@ D3D12TextureCache::SamplerParameters D3D12TextureCache::GetSamplerParameters(
     }
   }
 
+  LogSamplerParameters(binding.fetch_constant, parameters.value);
+
   return parameters;
 }
 
@@ -1590,6 +1592,7 @@ bool D3D12TextureCache::LoadTextureDataFromResidentMemoryImpl(Texture& texture,
   if (load_shader == kLoadShaderIndexUnknown) {
     return false;
   }
+  LogTextureLoad(texture_key, load_shader, load_base, load_mips);
   bool texture_resolution_scaled = texture_key.scaled_resolve;
   ID3D12PipelineState* pipeline =
       texture_resolution_scaled ? load_pipelines_scaled_[load_shader].Get()

@@ -17,6 +17,16 @@
 #include "xenia/gpu/gpu_flags.h"
 #include "xenia/gpu/shared_memory.h"
 
+DEFINE_bool(log_samplers, false,
+            "Log the sampler parameters each backend derives from a fetch "
+            "constant.",
+            "GPU.Debug");
+
+DEFINE_bool(log_texture_loads, false,
+            "Log every texture upload with its guest key and the load "
+            "shader the backend picked for it.",
+            "GPU.Debug");
+
 DEFINE_int32(
     draw_resolution_scale_x, 1,
     "Integer pixel width scale used for scaling the rendering resolution "
@@ -195,6 +205,36 @@ bool TextureCache::ClampDrawResolutionScaleToMaxSupported(
   }
 
   return !was_clamped;
+}
+
+void TextureCache::LogSamplerParameters(uint32_t fetch_constant,
+                                        uint32_t packed) const {
+  if (!cvars::log_samplers) {
+    return;
+  }
+  XELOGI(
+      "log_samplers: fetch {}, value 0x{:08X}, clamp {}/{}/{}, border {}, "
+      "linear mag {} min {} mip {}, aniso {}, mip min level {}, base map {}",
+      fetch_constant, packed, packed & 0x7, (packed >> 3) & 0x7,
+      (packed >> 6) & 0x7, (packed >> 9) & 0x3, (packed >> 11) & 0x1,
+      (packed >> 12) & 0x1, (packed >> 13) & 0x1, (packed >> 14) & 0x7,
+      (packed >> 17) & 0xF, (packed >> 21) & 0x1);
+}
+
+void TextureCache::LogTextureLoad(const TextureKey& key, uint32_t load_shader,
+                                  bool load_base, bool load_mips) const {
+  if (!cvars::log_texture_loads) {
+    return;
+  }
+  XELOGI(
+      "log_texture_loads: base 0x{:08X} mips 0x{:08X}, {}x{}x{}, {} mips, "
+      "{}, pitch {}, {}{}{}, load shader {}, loading {}{}",
+      key.base_page << 12, key.mip_page << 12, key.width_minus_1 + 1,
+      key.height_minus_1 + 1, key.depth_or_array_size_minus_1 + 1,
+      key.mip_max_level + 1, FormatInfo::GetName(key.format), key.pitch,
+      key.tiled ? "tiled" : "linear", key.packed_mips ? ", packed mips" : "",
+      key.signed_separate ? ", signed" : "", load_shader,
+      load_base ? "base" : "", load_mips ? " mips" : "");
 }
 
 void TextureCache::ClearCache() { DestroyAllTextures(); }

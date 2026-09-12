@@ -139,8 +139,12 @@ void SpirvShaderTranslator::KillPixel(
 void SpirvShaderTranslator::ProcessAluInstruction(
     const ParsedAluInstruction& instr,
     uint8_t memexport_eM_potentially_written_before) {
+  if (BisectSkipsInstruction()) {
+    return;
+  }
   if (instr.IsNop()) {
     // Don't even disassemble or update predication.
+    BisectSnapshotAfterInstruction();
     return;
   }
 
@@ -185,6 +189,8 @@ void SpirvShaderTranslator::ProcessAluInstruction(
     cf_exec_predicate_written_ = true;
     CloseInstructionPredication();
   }
+
+  BisectSnapshotAfterInstruction();
 }
 
 spv::Id SpirvShaderTranslator::ProcessVectorAluOperation(

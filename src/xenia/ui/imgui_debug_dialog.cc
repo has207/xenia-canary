@@ -27,6 +27,7 @@
 #include "xenia/cpu/processor.h"
 #include "xenia/emulator.h"
 #include "xenia/gpu/graphics_system.h"
+#include "xenia/gpu/trace_writer.h"
 #include "xenia/ui/imgui_host_notification.h"
 
 DECLARE_int32(anisotropic_override);
@@ -65,6 +66,12 @@ DECLARE_bool(clear_memory_page_state);
 DECLARE_bool(scribble_heap);
 DECLARE_int32(scribble_heap_value);
 DECLARE_bool(occlusion_query_log);
+DECLARE_bool(log_draws);
+DECLARE_bool(log_resolves);
+DECLARE_bool(log_transfers);
+DECLARE_bool(log_samplers);
+DECLARE_bool(log_texture_loads);
+DECLARE_bool(trace_gpu_stream);
 DECLARE_bool(gpu_debug_markers);
 DECLARE_bool(disassemble_pm4);
 DECLARE_bool(log_guest_driven_gpu_register_written_values);
@@ -340,6 +347,12 @@ void ImGuiDebugDialog::LoadCurrentSettings() {
   log_mask_ = cvars::log_mask;
   log_high_frequency_kernel_calls_ = cvars::log_high_frequency_kernel_calls;
   occlusion_query_log_ = cvars::occlusion_query_log;
+  log_draws_ = cvars::log_draws;
+  log_resolves_ = cvars::log_resolves;
+  log_transfers_ = cvars::log_transfers;
+  log_samplers_ = cvars::log_samplers;
+  log_texture_loads_ = cvars::log_texture_loads;
+  trace_gpu_stream_ = cvars::trace_gpu_stream;
   gpu_debug_markers_ = cvars::gpu_debug_markers;
   disassemble_pm4_ = cvars::disassemble_pm4;
   log_guest_driven_gpu_register_written_values_ =
@@ -624,6 +637,8 @@ void ImGuiDebugDialog::OnDraw(ImGuiIO& io) {
 #if !defined(NDEBUG)
   is_release_build = false;
 #endif
+  constexpr bool kTraceWriterBuilt =
+      XE_ENABLE_TRACE_WRITER_INSTRUMENTATION == 1;
 
   bool show_common = AnyMatchesFilter({
       "anisotropic_override",
@@ -669,11 +684,17 @@ void ImGuiDebugDialog::OnDraw(ImGuiIO& io) {
       "log_mask",
       "log_high_frequency_kernel_calls",
       "occlusion_query_log",
+      "log_draws",
+      "log_resolves",
+      "log_transfers",
+      "log_samplers",
+      "log_texture_loads",
       "gpu_debug_markers",
       "disassemble_pm4",
       "log_guest_driven_gpu_register_written_values",
       "log_ringbuffer_kickoff_initiator_bts",
       "capture_gpu_trace",
+      "trace_gpu_stream",
   });
 
   bool show_cpu_tracing =
@@ -1337,6 +1358,58 @@ void ImGuiDebugDialog::OnDraw(ImGuiIO& io) {
             }
           }
 
+          if (MatchesFilter("log_draws")) {
+            ImGui::TableNextRow();
+            ImGui::TableSetColumnIndex(0);
+            DrawLabelCell("log_draws");
+            ImGui::TableSetColumnIndex(1);
+            if (RightAlignedCheckbox("##log_draws", &log_draws_)) {
+              ApplyBoolSetting("GPU.Debug", "log_draws", log_draws_);
+            }
+          }
+
+          if (MatchesFilter("log_resolves")) {
+            ImGui::TableNextRow();
+            ImGui::TableSetColumnIndex(0);
+            DrawLabelCell("log_resolves");
+            ImGui::TableSetColumnIndex(1);
+            if (RightAlignedCheckbox("##log_resolves", &log_resolves_)) {
+              ApplyBoolSetting("GPU.Debug", "log_resolves", log_resolves_);
+            }
+          }
+
+          if (MatchesFilter("log_transfers")) {
+            ImGui::TableNextRow();
+            ImGui::TableSetColumnIndex(0);
+            DrawLabelCell("log_transfers");
+            ImGui::TableSetColumnIndex(1);
+            if (RightAlignedCheckbox("##log_transfers", &log_transfers_)) {
+              ApplyBoolSetting("GPU.Debug", "log_transfers", log_transfers_);
+            }
+          }
+
+          if (MatchesFilter("log_samplers")) {
+            ImGui::TableNextRow();
+            ImGui::TableSetColumnIndex(0);
+            DrawLabelCell("log_samplers");
+            ImGui::TableSetColumnIndex(1);
+            if (RightAlignedCheckbox("##log_samplers", &log_samplers_)) {
+              ApplyBoolSetting("GPU.Debug", "log_samplers", log_samplers_);
+            }
+          }
+
+          if (MatchesFilter("log_texture_loads")) {
+            ImGui::TableNextRow();
+            ImGui::TableSetColumnIndex(0);
+            DrawLabelCell("log_texture_loads");
+            ImGui::TableSetColumnIndex(1);
+            if (RightAlignedCheckbox("##log_texture_loads",
+                                     &log_texture_loads_)) {
+              ApplyBoolSetting("GPU.Debug", "log_texture_loads",
+                               log_texture_loads_);
+            }
+          }
+
           if (MatchesFilter("gpu_debug_markers")) {
             ImGui::TableNextRow();
             ImGui::TableSetColumnIndex(0);
@@ -1398,17 +1471,51 @@ void ImGuiDebugDialog::OnDraw(ImGuiIO& io) {
                 emulator_window_ ? emulator_window_->emulator() : nullptr;
             gpu::GraphicsSystem* trace_graphics =
                 trace_emulator ? trace_emulator->graphics_system() : nullptr;
+            bool streaming =
+                trace_graphics && trace_graphics->is_tracing_stream();
+            const char* suffix = "Writes one frame to trace_gpu_prefix";
+            if (!kTraceWriterBuilt) {
+              suffix = "[Build with --enable-gpu-trace]";
+            } else if (trace_gpu_stream_) {
+              suffix = "Writes every packet to trace_gpu_prefix";
+            }
+            const char* label = streaming ? "Stop##capture_gpu_trace"
+                                          : "Capture##capture_gpu_trace";
             ImGui::TableNextRow();
             ImGui::TableSetColumnIndex(0);
-            DrawLabelCell("capture_gpu_trace",
-                          "Writes one frame to trace_gpu_prefix");
+            DrawLabelCell("capture_gpu_trace", suffix);
             ImGui::TableSetColumnIndex(1);
-            ImGui::BeginDisabled(trace_graphics == nullptr);
+            ImGui::BeginDisabled(trace_graphics == nullptr ||
+                                 !kTraceWriterBuilt);
             RightAlignNextItem(kTextInputWidth);
-            if (ImGui::Button("Capture##capture_gpu_trace",
-                              ImVec2(kTextInputWidth, 0))) {
-              trace_graphics->RequestFrameTrace();
-              ShowNotification("capture_gpu_trace", "Frame trace requested");
+            if (ImGui::Button(label, ImVec2(kTextInputWidth, 0))) {
+              if (streaming) {
+                trace_graphics->RequestEndTracing();
+                ShowNotification("capture_gpu_trace", "Stopped");
+              } else if (trace_gpu_stream_) {
+                trace_graphics->BeginTracing();
+                ShowNotification("capture_gpu_trace", "Started");
+              } else {
+                trace_graphics->RequestFrameTrace();
+                ShowNotification("capture_gpu_trace", "Frame trace requested");
+              }
+            }
+            ImGui::EndDisabled();
+          }
+
+          if (MatchesFilter("trace_gpu_stream")) {
+            ImGui::TableNextRow();
+            ImGui::TableSetColumnIndex(0);
+            ImGui::BeginDisabled(!kTraceWriterBuilt);
+            DrawLabelCell("trace_gpu_stream",
+                          kTraceWriterBuilt
+                              ? "Stream instead of capturing one frame"
+                              : "[Build with --enable-gpu-trace]");
+            ImGui::TableSetColumnIndex(1);
+            if (RightAlignedCheckbox("##trace_gpu_stream",
+                                     &trace_gpu_stream_)) {
+              ApplyBoolSetting("GPU.Debug", "trace_gpu_stream",
+                               trace_gpu_stream_);
             }
             ImGui::EndDisabled();
           }

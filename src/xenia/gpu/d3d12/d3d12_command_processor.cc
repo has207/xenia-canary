@@ -2795,7 +2795,7 @@ bool D3D12CommandProcessor::IssueDraw(xenos::PrimitiveType primitive_type,
 
   // Push debug marker with Xbox 360 draw context for PIX/RenderDoc annotation.
   // Done early so texture loads appear nested under the draw that uses them.
-  if (debug_markers_enabled_) {
+  if (debug_markers_enabled_ || cvars::log_draws) {
     char label[draw_util::kDebugMarkerLabelMaxLength];
     draw_util::FormatDrawDebugMarker(
         label, sizeof(label), primitive_type, primitive_processing_result,
@@ -3286,6 +3286,18 @@ void D3D12CommandProcessor::InitializeTrace() {
   if (shared_memory_submitted) {
     shared_memory_->InitializeTraceCompleteDownloads();
   }
+}
+
+bool D3D12CommandProcessor::DumpEdramSnapshotToFile(
+    const std::filesystem::path& path) {
+  if (!BeginSubmission(false)) {
+    return false;
+  }
+  if (!render_target_cache_->InitializeTraceSubmitDownloads()) {
+    return false;
+  }
+  AwaitAllQueueOperationsCompletion();
+  return render_target_cache_->WriteEdramSnapshotToFile(path);
 }
 
 void D3D12CommandProcessor::ResolveReadCallbackThunk(void* context,

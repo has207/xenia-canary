@@ -43,6 +43,8 @@ class TracePlayer : public TraceReader {
 
   void SeekFrame(int target_frame);
   void SeekCommand(int target_command);
+  // Plays a frame up to one command, continuing from the previous frame.
+  void PlayFramePrefix(int target_frame, int target_command);
 
   void WaitOnPlayback();
 

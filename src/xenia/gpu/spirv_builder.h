@@ -33,6 +33,22 @@ class SpirvBuilder : public spv::Builder {
   void SetAllowContraction(bool allow) { allow_contraction_ = allow; }
   bool AllowsContraction() const { return allow_contraction_; }
 
+  // Decorate every float arithmetic result with NoContraction.
+  void SetNoContractionAll(bool all) { no_contraction_all_ = all; }
+
+  spv::Id createUnaryOp(spv::Op op_code, spv::Id type_id, spv::Id operand) {
+    spv::Id result = spv::Builder::createUnaryOp(op_code, type_id, operand);
+    MarkNoContractionAll(op_code, result);
+    return result;
+  }
+  spv::Id createBinOp(spv::Op op_code, spv::Id type_id, spv::Id operand1,
+                      spv::Id operand2) {
+    spv::Id result =
+        spv::Builder::createBinOp(op_code, type_id, operand1, operand2);
+    MarkNoContractionAll(op_code, result);
+    return result;
+  }
+
   // Make public rather than protected.
   using spv::Builder::createSelectionMerge;
 
@@ -198,7 +214,11 @@ class SpirvBuilder : public spv::Builder {
   };
 
  private:
+  // Defined in the .cc since the spv enum shim is not visible in headers.
+  void MarkNoContractionAll(spv::Op op_code, spv::Id result);
+
   bool allow_contraction_ = false;
+  bool no_contraction_all_ = false;
 };
 
 }  // namespace gpu

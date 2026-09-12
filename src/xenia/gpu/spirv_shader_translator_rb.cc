@@ -427,6 +427,8 @@ spv::Id SpirvShaderTranslator::Depth20e4To32(SpirvBuilder& builder,
 }
 
 void SpirvShaderTranslator::CompleteFragmentShaderInMain() {
+  BisectOverrideColorOutput();
+
   // Baked into the FSI shader through the modification. Every loop bounded by
   // it below is on the FSI path.
   uint32_t fsi_sample_count =

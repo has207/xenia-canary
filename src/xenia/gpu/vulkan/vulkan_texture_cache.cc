@@ -770,6 +770,8 @@ VulkanTextureCache::SamplerParameters VulkanTextureCache::GetSamplerParameters(
     }
   }
 
+  LogSamplerParameters(binding.fetch_constant, parameters.value);
+
   return parameters;
 }
 
@@ -1237,6 +1239,7 @@ bool VulkanTextureCache::LoadTextureDataFromResidentMemoryImpl(Texture& texture,
   if (load_shader == kLoadShaderIndexUnknown) {
     return false;
   }
+  LogTextureLoad(texture_key, load_shader, load_base, load_mips);
   VkPipeline pipeline = texture_key.scaled_resolve
                             ? load_pipelines_scaled_[load_shader]
                             : load_pipelines_[load_shader];

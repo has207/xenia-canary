@@ -17,10 +17,15 @@
 #include <vector>
 
 #include "xenia/base/assert.h"
+#include "xenia/base/cvar.h"
+#include "xenia/base/logging.h"
 #include "xenia/gpu/primitive_processor.h"
 #include "xenia/gpu/register_file.h"
 #include "xenia/gpu/shader.h"
 #include "xenia/gpu/trace_writer.h"
+
+DECLARE_bool(log_draws);
+DECLARE_bool(log_resolves);
 #include "xenia/gpu/xenos.h"
 #include "xenia/memory.h"
 
@@ -819,6 +824,9 @@ inline void FormatResolveCopyDebugMarker(char* buffer, size_t buffer_size,
                 resolve_info.copy_dest_extent_length,
                 resolve_info.coordinate_info.width_div_8 * 8,
                 resolve_info.height_div_8 * 8);
+  if (cvars::log_resolves) {
+    XELOGI("log_resolves: {}", buffer);
+  }
 }
 
 // Formats a debug marker string for resolve clear operations (EDRAM writes).
@@ -838,6 +846,9 @@ inline void FormatResolveClearDebugMarker(char* buffer, size_t buffer_size,
     std::snprintf(buffer, buffer_size,
                   "EDRAM Write: Resolve Clear color=0x%08X",
                   resolve_info.rb_color_clear);
+  }
+  if (cvars::log_resolves) {
+    XELOGI("log_resolves: {}", buffer);
   }
 }
 
@@ -886,6 +897,9 @@ inline void FormatDrawDebugMarker(
                   primitive_processing_result.host_draw_vertex_count,
                   index_info, static_cast<unsigned long long>(vs_hash),
                   static_cast<unsigned long long>(ps_hash));
+  }
+  if (cvars::log_draws) {
+    XELOGI("log_draws: {}", buffer);
   }
 }
 

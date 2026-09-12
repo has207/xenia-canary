@@ -45,6 +45,7 @@ class TraceDump {
 
  private:
   bool Setup();
+  bool CaptureToPng(const std::filesystem::path& png_path);
   bool Load(const std::filesystem::path& trace_file_path);
   int Run();
 

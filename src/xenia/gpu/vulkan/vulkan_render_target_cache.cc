@@ -202,6 +202,11 @@ bool VulkanRenderTargetCache::Initialize(uint32_t shared_memory_binding_count) {
     msaa_2x_attachments_supported_ = false;
     msaa_2x_no_attachments_supported_ = false;
   }
+  if (!msaa_2x_attachments_supported_) {
+    XELOGW(
+        "2x MSAA is not supported, emulated via top-left and bottom-right "
+        "samples of 4x MSAA");
+  }
 
   // Descriptor set layouts.
   VkDescriptorSetLayoutBinding descriptor_set_layout_bindings[2];
@@ -1060,7 +1065,7 @@ bool VulkanRenderTargetCache::Resolve(
   // Copying.
   bool copied = false;
   if (resolve_info.copy_dest_extent_length) {
-    if (command_processor_.debug_markers_enabled()) {
+    if (command_processor_.debug_markers_enabled() || cvars::log_resolves) {
       char label[draw_util::kDebugMarkerLabelMaxLength];
       draw_util::FormatResolveCopyDebugMarker(label, sizeof(label),
                                               resolve_info);
@@ -1369,7 +1374,7 @@ bool VulkanRenderTargetCache::Resolve(
   bool clear_depth = resolve_info.IsClearingDepth();
   bool clear_color = resolve_info.IsClearingColor();
   if (clear_depth || clear_color) {
-    if (command_processor_.debug_markers_enabled()) {
+    if (command_processor_.debug_markers_enabled() || cvars::log_resolves) {
       char label[draw_util::kDebugMarkerLabelMaxLength];
       draw_util::FormatResolveClearDebugMarker(
           label, sizeof(label), resolve_info, clear_depth, clear_color);
@@ -2769,6 +2774,9 @@ void VulkanRenderTargetCache::PerformTransfersAndResolveClears(
   if (!has_transfers) {
     return;
   }
+
+  LogTransfers(render_target_count, render_targets, render_target_transfers,
+               resolve_clear_needed ? resolve_clear_rectangle : nullptr);
 
   command_processor_.PushDebugMarker("PerformTransfersAndResolveClears");
 

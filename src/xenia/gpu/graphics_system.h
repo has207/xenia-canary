@@ -107,6 +107,8 @@ class GraphicsSystem {
   void RequestFrameTrace();
   void BeginTracing();
   void EndTracing();
+  void RequestEndTracing();
+  bool is_tracing_stream() const;
 
   bool is_paused() const { return paused_; }
   void Pause();

@@ -3729,7 +3729,7 @@ bool VulkanCommandProcessor::IssueDraw(xenos::PrimitiveType prim_type,
 
   // Push debug marker with Xbox 360 draw context for RenderDoc annotation.
   // Done early so texture loads appear nested under the draw that uses them.
-  if (debug_markers_enabled_) {
+  if (debug_markers_enabled_ || cvars::log_draws) {
     char label[draw_util::kDebugMarkerLabelMaxLength];
     draw_util::FormatDrawDebugMarker(
         label, sizeof(label), prim_type, primitive_processing_result,
@@ -5283,6 +5283,18 @@ void VulkanCommandProcessor::InitializeTrace() {
   if (shared_memory_submitted) {
     shared_memory_->InitializeTraceCompleteDownloads();
   }
+}
+
+bool VulkanCommandProcessor::DumpEdramSnapshotToFile(
+    const std::filesystem::path& path) {
+  if (!BeginSubmission(true)) {
+    return false;
+  }
+  if (!render_target_cache_->InitializeTraceSubmitDownloads()) {
+    return false;
+  }
+  AwaitAllQueueOperationsCompletion();
+  return render_target_cache_->WriteEdramSnapshotToFile(path);
 }
 
 void VulkanCommandProcessor::LogRecentSubmissions(const char* context) {

@@ -429,6 +429,7 @@ class D3D12CommandProcessor final : public CommandProcessor {
   std::vector<MemexportStagedRange> memexport_staged_;
 
   void InitializeTrace() override;
+  bool DumpEdramSnapshotToFile(const std::filesystem::path& path) override;
 
  private:
   static constexpr uint32_t kQueueFrames = 3;

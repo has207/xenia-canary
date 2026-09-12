@@ -459,6 +459,14 @@ void GraphicsSystem::BeginTracing() {
 
 void GraphicsSystem::EndTracing() { command_processor_->EndTracing(); }
 
+void GraphicsSystem::RequestEndTracing() {
+  command_processor_->RequestEndTracing();
+}
+
+bool GraphicsSystem::is_tracing_stream() const {
+  return command_processor_->is_tracing_stream();
+}
+
 void GraphicsSystem::Pause() {
   paused_ = true;
 

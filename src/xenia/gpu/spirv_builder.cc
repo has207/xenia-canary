@@ -38,10 +38,31 @@ spv::Id SpirvBuilder::createQuadOp(spv::Op op_code, spv::Id type_id,
   return result;
 }
 
+void SpirvBuilder::MarkNoContractionAll(spv::Op op_code, spv::Id result) {
+  if (!no_contraction_all_ || allow_contraction_) {
+    return;
+  }
+  switch (op_code) {
+    case spv::OpFAdd:
+    case spv::OpFSub:
+    case spv::OpFMul:
+    case spv::OpFDiv:
+    case spv::OpFRem:
+    case spv::OpFMod:
+    case spv::OpFNegate:
+    case spv::OpVectorTimesScalar:
+    case spv::OpDot:
+      break;
+    default:
+      return;
+  }
+  addDecoration(result, spv::DecorationNoContraction);
+}
+
 spv::Id SpirvBuilder::createNoContractionUnaryOp(spv::Op op_code,
                                                  spv::Id type_id,
                                                  spv::Id operand) {
-  spv::Id result = createUnaryOp(op_code, type_id, operand);
+  spv::Id result = spv::Builder::createUnaryOp(op_code, type_id, operand);
   if (!allow_contraction_) {
     addDecoration(result, spv::DecorationNoContraction);
   }
@@ -51,7 +72,8 @@ spv::Id SpirvBuilder::createNoContractionUnaryOp(spv::Op op_code,
 spv::Id SpirvBuilder::createNoContractionBinOp(spv::Op op_code, spv::Id type_id,
                                                spv::Id operand1,
                                                spv::Id operand2) {
-  spv::Id result = createBinOp(op_code, type_id, operand1, operand2);
+  spv::Id result =
+      spv::Builder::createBinOp(op_code, type_id, operand1, operand2);
   if (!allow_contraction_) {
     addDecoration(result, spv::DecorationNoContraction);
   }

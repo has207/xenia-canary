@@ -12,6 +12,7 @@
 
 #include <cmath>
 #include <cstdint>
+#include <filesystem>
 #include <functional>
 #include <map>
 #include <unordered_map>
@@ -229,6 +230,8 @@ class RenderTargetCache {
   // afterwards. Submit returns whether there is anything for Complete to read.
   bool InitializeTraceSubmitDownloads();
   void InitializeTraceCompleteDownloads();
+  // Writes the trace EDRAM readback to a raw file.
+  bool WriteEdramSnapshotToFile(const std::filesystem::path& path);
 
  protected:
   RenderTargetCache(const RegisterFile& register_file, const Memory& memory,
@@ -701,6 +704,12 @@ class RenderTargetCache {
   // blending reads the destination. Everything else stays bit-exact.
   bool IsTransferValueConverted7e3And8888(RenderTargetKey source,
                                           RenderTargetKey dest) const;
+
+  // Logs one round of EDRAM ownership transfers.
+  void LogTransfers(uint32_t render_target_count,
+                    RenderTarget* const* render_targets,
+                    const std::vector<Transfer>* render_target_transfers,
+                    const Transfer::Rectangle* resolve_clear_rectangle) const;
 
  private:
   const RegisterFile& register_file_;

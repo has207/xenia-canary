@@ -13,6 +13,7 @@
 #include <atomic>
 #include <cstring>
 #include <deque>
+#include <filesystem>
 #include <functional>
 #include <memory>
 #include <mutex>
@@ -163,6 +164,11 @@ class CommandProcessor {
 
   void CallInThread(std::function<void()> fn);
 
+  // Dumps the EDRAM contents to a raw file.
+  virtual bool DumpEdramSnapshotToFile(const std::filesystem::path& path) {
+    return false;
+  }
+
   virtual void ClearCaches();
   virtual void InvalidateGpuMemory();
   virtual void ClearReadbackBuffers();
@@ -210,6 +216,11 @@ class CommandProcessor {
   virtual void RequestFrameTrace(const std::filesystem::path& root_path);
   virtual void BeginTracing(const std::filesystem::path& root_path);
   virtual void EndTracing();
+  // Safe from any thread, the writer is closed on the next swap.
+  void RequestEndTracing() { trace_state_ = TraceState::kDisabled; }
+  bool is_tracing_stream() const {
+    return trace_state_ == TraceState::kStreaming;
+  }
 
   virtual void TracePlaybackWroteMemory(uint32_t base_ptr, uint32_t length) = 0;
 
