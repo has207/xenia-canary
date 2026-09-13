@@ -32,6 +32,9 @@ FAQ
 - Q: Why is macOS build not as capable as Windows / Linux?<br>
   A: macOS is the newest port, with a completely different CPU and GPU backends that have not had nearly the amount of testing of the other platforms. Many games will fail on macOS that run on Windows and Linux. This is working as intended for now.
 
+- Q: Can you add ARM64 Linux or Windows builds?<br>
+  A: Yes, and I choose not to, there is no need to send me PRs or requests for these builds. They will be made available when I'm ready to support them, in the meantime you can build from source if you really want to run them.
+  
 - Q: Will you accept donations of money or games/hardware for testing?<br>
   A: No, this project is strictly a hobby and I would like to keep it that way. I pay for all games/hardware I test out of my own pocket and do not want to receive any compensation for my work on Xenia.
 
